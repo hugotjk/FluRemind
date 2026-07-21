@@ -1,0 +1,6 @@
+{
+  "name": "FluRemind - Jogos do Fluminense",
+  "description": "Gerenciador de jogos do Fluminense FC com checklist de tarefas e lembretes automáticos via Telegram.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

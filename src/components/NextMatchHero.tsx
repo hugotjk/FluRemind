@@ -1,0 +1,195 @@
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, MapPin, Send, CheckCircle2, AlertCircle, Shield, Sparkles } from 'lucide-react';
+import { Match } from '../types';
+
+interface NextMatchHeroProps {
+  match: Match | null;
+  onOpenChecklist: (match: Match) => void;
+  onTestTelegramMatch: (match: Match) => void;
+}
+
+export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
+  match,
+  onOpenChecklist,
+  onTestTelegramMatch
+}) => {
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number; isToday: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!match) return;
+
+    const calculateTime = () => {
+      const matchDateTime = new Date(`${match.date}T${match.time}:00`);
+      const now = new Date();
+      const diff = matchDateTime.getTime() - now.getTime();
+
+      const todayStr = now.toISOString().split('T')[0];
+      const isToday = match.date === todayStr;
+
+      if (diff <= 0) {
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, isToday });
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeLeft({ days, hours, minutes, seconds, isToday });
+    };
+
+    calculateTime();
+    const interval = setInterval(calculateTime, 1000);
+    return () => clearInterval(interval);
+  }, [match]);
+
+  if (!match) {
+    return (
+      <div className="bg-gradient-to-r from-stone-900 to-stone-800 text-white rounded-2xl p-6 shadow-xl border border-stone-700 text-center">
+        <Shield className="w-12 h-12 text-[#e6b800] mx-auto mb-2 opacity-80" />
+        <h3 className="text-lg font-bold">Nenhum próximo jogo cadastrado</h3>
+        <p className="text-xs text-stone-400 mt-1">Clique em "+ Novo Jogo" para adicionar a próxima partida do Tricolor!</p>
+      </div>
+    );
+  }
+
+  const completedTasks = match.tasks.filter(t => t.completed).length;
+  const totalTasks = match.tasks.length;
+  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#4a0815] via-[#611221] to-[#00381b] border-2 border-[#e6b800]/60 text-white p-6 shadow-2xl">
+      {/* Background Accent Graphics */}
+      <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-[#e6b800]/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-64 h-64 bg-[#008040]/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        
+        {/* Left Side: Game details */}
+        <div className="space-y-3 max-w-2xl">
+          <div className="flex items-center gap-2 flex-wrap">
+            {timeLeft?.isToday ? (
+              <span className="px-3 py-1 rounded-full text-xs font-black bg-rose-600 text-white animate-pulse border border-rose-400 flex items-center gap-1">
+                🔥 É HOJE! JOGO DO DIA 🇭🇺
+              </span>
+            ) : (
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#e6b800] text-[#5a0c1a] flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> PRÓXIMO CONFLITO
+              </span>
+            )}
+
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 text-white/90 border border-white/20">
+              {match.competition}
+            </span>
+
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
+              {match.isHome ? '🏠 Casa' : '✈️ Fora'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-3xl font-black font-serif tracking-tight">FLUMINENSE</span>
+              <span className="text-2xl font-bold text-[#e6b800]">VS</span>
+              <span className="text-3xl font-black font-serif text-amber-100">{match.opponent.toUpperCase()}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-stone-200">
+            <div className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10">
+              <Calendar className="w-3.5 h-3.5 text-[#e6b800]" />
+              <span>{match.date.split('-').reverse().join('/')}</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10">
+              <Clock className="w-3.5 h-3.5 text-[#e6b800]" />
+              <span>{match.time} hrs</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10">
+              <MapPin className="w-3.5 h-3.5 text-[#e6b800]" />
+              <span>{match.location}</span>
+            </div>
+          </div>
+
+          {match.notes && (
+            <p className="text-xs text-amber-200/90 italic bg-black/20 p-2.5 rounded-lg border border-amber-500/20">
+              "{match.notes}"
+            </p>
+          )}
+
+          {/* Checklist Progress */}
+          <div className="pt-1">
+            <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+              <span className="flex items-center gap-1.5 text-stone-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                Checklist do Jogo
+              </span>
+              <span className="text-[#e6b800]">
+                {completedTasks}/{totalTasks} concluídas ({progressPercent}%)
+              </span>
+            </div>
+
+            <div className="w-full bg-black/40 rounded-full h-2.5 overflow-hidden p-0.5 border border-white/10">
+              <div
+                className="bg-gradient-to-r from-emerald-500 to-[#e6b800] h-full rounded-full transition-all duration-500"
+                style={{ width: `${progressPercent}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side: Countdown Timer & Quick Action Buttons */}
+        <div className="flex flex-col items-center lg:items-end gap-4 min-w-[240px]">
+          {/* Countdown Clock */}
+          {timeLeft && (
+            <div className="bg-black/40 backdrop-blur-md p-3.5 rounded-xl border border-white/15 w-full text-center">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-stone-400 block mb-1">
+                Tempo Restante
+              </span>
+              <div className="grid grid-cols-4 gap-1.5 text-center">
+                <div className="bg-white/5 p-1.5 rounded">
+                  <span className="text-xl font-black text-[#e6b800] font-mono">{timeLeft.days}</span>
+                  <span className="text-[9px] block text-stone-300">dias</span>
+                </div>
+                <div className="bg-white/5 p-1.5 rounded">
+                  <span className="text-xl font-black text-white font-mono">{String(timeLeft.hours).padStart(2, '0')}</span>
+                  <span className="text-[9px] block text-stone-300">hrs</span>
+                </div>
+                <div className="bg-white/5 p-1.5 rounded">
+                  <span className="text-xl font-black text-white font-mono">{String(timeLeft.minutes).padStart(2, '0')}</span>
+                  <span className="text-[9px] block text-stone-300">min</span>
+                </div>
+                <div className="bg-white/5 p-1.5 rounded">
+                  <span className="text-xl font-black text-emerald-400 font-mono">{String(timeLeft.seconds).padStart(2, '0')}</span>
+                  <span className="text-[9px] block text-stone-300">seg</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 w-full">
+            <button
+              onClick={() => onOpenChecklist(match)}
+              className="flex-1 py-2 px-3 rounded-xl bg-white text-[#5a0c1a] font-bold text-xs hover:bg-stone-100 transition-all shadow text-center"
+            >
+              📋 Ver Tarefas
+            </button>
+
+            <button
+              onClick={() => onTestTelegramMatch(match)}
+              className="py-2 px-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs transition-all shadow flex items-center justify-center gap-1.5 whitespace-nowrap"
+              title="Notificar este jogo no Telegram agora"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Notificar</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
