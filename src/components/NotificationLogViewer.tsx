@@ -11,7 +11,9 @@ export const NotificationLogViewer: React.FC<NotificationLogViewerProps> = ({
   logs,
   onClearLogs
 }) => {
-  if (logs.length === 0) {
+  const safeLogs = Array.isArray(logs) ? logs : [];
+
+  if (safeLogs.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center shadow-sm">
         <Terminal className="w-12 h-12 text-stone-300 mx-auto mb-3" />
@@ -30,7 +32,7 @@ export const NotificationLogViewer: React.FC<NotificationLogViewerProps> = ({
         <div className="flex items-center gap-2">
           <Terminal className="w-5 h-5 text-emerald-400" />
           <h2 className="text-sm font-bold tracking-tight font-mono">
-            Histórico de Notificações Telegram ({logs.length})
+            Histórico de Notificações Telegram ({safeLogs.length})
           </h2>
         </div>
 
@@ -44,7 +46,7 @@ export const NotificationLogViewer: React.FC<NotificationLogViewerProps> = ({
       </div>
 
       <div className="divide-y divide-stone-100 max-h-[600px] overflow-y-auto">
-        {logs.map((log) => (
+        {safeLogs.map((log) => (
           <div key={log.id} className="p-4 hover:bg-stone-50 transition-colors text-xs space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">

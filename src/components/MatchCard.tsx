@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, MapPin, CheckSquare, Plus, Send, Edit, Trash2, ChevronDown, ChevronUp, AlertCircle, Shield } from 'lucide-react';
 import { Match, Task } from '../types';
+import { formatMatchTeams } from '../utils/teamLogos';
 
 interface MatchCardProps {
   match: Match;
@@ -25,8 +26,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   const [newTaskText, setNewTaskText] = useState('');
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
 
-  const completedTasks = match.tasks.filter(t => t.completed).length;
-  const totalTasks = match.tasks.length;
+  const tasks = match.tasks || [];
+  const completedTasks = tasks.filter(t => t.completed).length;
+  const totalTasks = tasks.length;
   const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -66,27 +68,57 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       <div className="p-4 sm:p-5 border-b border-stone-100 bg-stone-50/80">
         <div className="flex items-start justify-between gap-3">
           
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              {isToday && (
-                <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-rose-600 text-white animate-pulse">
-                  🔥 É HOJE
-                </span>
-              )}
-              <span className={`px-2.5 py-0.5 rounded-md text-xs font-bold border ${getCompColor(match.competition)}`}>
-                {match.competition}
-              </span>
-              <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-stone-200 text-stone-700">
-                {match.isHome ? '🏠 Casa (Maracanã)' : '✈️ Fora'}
-              </span>
-            </div>
+          {(() => {
+            const { homeTeam, homeLogo, homeIsFlu, awayTeam, awayLogo, awayIsFlu } = formatMatchTeams(match);
+            return (
+              <div className="space-y-1.5 max-w-full">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isToday && (
+                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-rose-600 text-white animate-pulse">
+                      🔥 É HOJE
+                    </span>
+                  )}
+                  <span className={`px-2.5 py-0.5 rounded-md text-xs font-bold border ${getCompColor(match.competition)}`}>
+                    {match.competition}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-stone-200 text-stone-700">
+                    {match.isHome ? '🏠 Casa (Maracanã)' : '✈️ Fora'}
+                  </span>
+                </div>
 
-            <div className="flex items-center gap-2 pt-1">
-              <span className="text-xl font-black text-stone-900 font-serif">FLUMINENSE</span>
-              <span className="text-sm font-bold text-[#722F37]">VS</span>
-              <span className="text-xl font-black text-stone-800 font-serif">{match.opponent}</span>
-            </div>
-          </div>
+                {/* Team Matchup - Mandante Primeiro, Visitante Segundo com Escudos */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-stone-900 leading-tight">
+                  {/* Mandante (Escudo ANTES do nome) */}
+                  <div className="inline-flex items-center gap-1.5">
+                    <img
+                      src={homeLogo}
+                      alt={homeTeam}
+                      className="w-5 h-5 sm:w-6 sm:h-6 object-contain shrink-0"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
+                    <span className={`text-base sm:text-lg font-black font-serif ${homeIsFlu ? 'text-stone-900 tracking-tight' : 'text-stone-800'}`}>
+                      {homeTeam}
+                    </span>
+                  </div>
+
+                  <span className="text-xs sm:text-sm font-bold text-[#722F37] px-0.5">VS</span>
+
+                  {/* Visitante (Escudo APÓS o nome) */}
+                  <div className="inline-flex items-center gap-1.5">
+                    <span className={`text-base sm:text-lg font-black font-serif ${awayIsFlu ? 'text-stone-900 tracking-tight' : 'text-stone-800'}`}>
+                      {awayTeam}
+                    </span>
+                    <img
+                      src={awayLogo}
+                      alt={awayTeam}
+                      className="w-5 h-5 sm:w-6 sm:h-6 object-contain shrink-0"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Action buttons */}
           <div className="flex items-center gap-1">
@@ -126,17 +158,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({
         <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600 mt-3 pt-2 border-t border-stone-200/60">
           <div className="flex items-center gap-1 font-semibold text-stone-900">
             <Calendar className="w-3.5 h-3.5 text-[#722F37]" />
-            <span>{match.date.split('-').reverse().join('/')}</span>
+            <span>{match.date ? match.date.split('-').reverse().join('/') : 'Data a definir'}</span>
           </div>
 
           <div className="flex items-center gap-1 font-semibold text-stone-900">
             <Clock className="w-3.5 h-3.5 text-[#722F37]" />
-            <span>{match.time} hrs</span>
+            <span>{match.time || '16:00'} hrs</span>
           </div>
 
           <div className="flex items-center gap-1">
             <MapPin className="w-3.5 h-3.5 text-stone-400" />
-            <span className="truncate max-w-[200px]">{match.location}</span>
+            <span className="truncate max-w-[200px]">{match.location || 'Maracanã'}</span>
           </div>
         </div>
 
@@ -180,7 +212,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 Nenhuma tarefa cadastrada ainda. Adicione abaixo!
               </p>
             ) : (
-              match.tasks.map(task => (
+              tasks.map(task => (
                 <div
                   key={task.id}
                   className={`flex items-center justify-between p-2 rounded-lg text-xs transition-colors ${

@@ -1,12 +1,18 @@
 import { Match, TelegramSettings, NotificationLog } from '../types';
 import { INITIAL_MATCHES } from '../data/initialData';
 
-const LOCAL_STORAGE_MATCHES_KEY = 'fluremind_matches_v5';
-const LOCAL_STORAGE_TELEGRAM_KEY = 'fluremind_telegram_v5';
-const LOCAL_STORAGE_LOGS_KEY = 'fluremind_logs_v5';
+const LOCAL_STORAGE_MATCHES_KEY = 'fluremind_matches_v6';
+const LOCAL_STORAGE_TELEGRAM_KEY = 'fluremind_telegram_v6';
+const LOCAL_STORAGE_LOGS_KEY = 'fluremind_logs_v6';
 
-// Unique persistent key for instant cross-device synchronization without codes
-const GLOBAL_CLOUD_SYNC_KEY = 'FLU-TRICOLOR-MATCHES-2026-PERSISTENT';
+// Dedicated cloud JSON blob ID for global cross-device synchronization
+const GLOBAL_CLOUD_BLOB_ID = '019f865f-95dd-7d09-95ac-045376f38d45';
+
+export interface CloudPayload {
+  matches: Match[];
+  telegramSettings?: TelegramSettings;
+  updatedAt?: string;
+}
 
 // Safe JSON fetch wrapper
 export async function safeFetchJson<T>(url: string, options?: RequestInit): Promise<{ ok: boolean; data?: T; error?: string; status?: number }> {
@@ -24,7 +30,7 @@ export async function safeFetchJson<T>(url: string, options?: RequestInit): Prom
       return {
         ok: false,
         status: res.status,
-        error: `O servidor retornou HTML (${res.status}) em vez de JSON.`
+        error: `O servidor retornou formato não-JSON (${res.status}).`
       };
     }
 
@@ -100,43 +106,50 @@ export function saveLocalLogs(logs: NotificationLog[]) {
 }
 
 export function getSyncCode(): string {
-  return GLOBAL_CLOUD_SYNC_KEY;
+  return GLOBAL_CLOUD_BLOB_ID;
 }
 
 export function setSyncCode(_code: string) {}
 
-// Multi-Device Cloud Sync API using global shared JSON storage
-export async function syncCloudData(_syncCode?: string, matchesData?: Match[]): Promise<{ success: boolean; remoteMatches?: Match[]; error?: string }> {
+// Multi-Device Cloud Sync API
+export async function syncCloudData(): Promise<{ success: boolean; remoteMatches?: Match[]; remoteTelegram?: TelegramSettings; error?: string }> {
   try {
-    const res = await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_SYNC_KEY}`, {
+    const res = await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_BLOB_ID}`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' }
     });
 
     if (res.ok) {
-      const remoteMatches = await res.json();
-      if (Array.isArray(remoteMatches)) {
-        return { success: true, remoteMatches };
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return { success: true, remoteMatches: data };
+      } else if (data && typeof data === 'object') {
+        return {
+          success: true,
+          remoteMatches: Array.isArray(data.matches) ? data.matches : [],
+          remoteTelegram: data.telegramSettings
+        };
       }
     }
   } catch (err) {
     console.log('Cloud sync status:', err);
   }
 
-  // Push local state if cloud is not yet created
-  if (matchesData) {
-    pushCloudData(GLOBAL_CLOUD_SYNC_KEY, matchesData);
-  }
-
-  return { success: true, remoteMatches: matchesData };
+  return { success: false };
 }
 
-export async function pushCloudData(_syncCode: string, matchesData: Match[]) {
+export async function pushCloudData(matchesData: Match[], telegramData?: TelegramSettings) {
   try {
-    await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_SYNC_KEY}`, {
+    const payload: CloudPayload = {
+      matches: matchesData,
+      telegramSettings: telegramData || getLocalTelegramSettings(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_BLOB_ID}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(matchesData)
+      body: JSON.stringify(payload)
     });
   } catch (e) {
     console.log('Cloud push notice:', e);

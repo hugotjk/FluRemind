@@ -21,6 +21,7 @@ import {
   pushCloudData
 } from './utils/syncManager';
 import { INITIAL_MATCHES } from './data/initialData';
+import { mergeMatchesPreservingTasks } from './utils/teamLogos';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'matches' | 'logs' | 'export'>('matches');
@@ -63,7 +64,7 @@ export default function App() {
   const syncMatchesState = (newMatches: Match[]) => {
     setMatches(newMatches);
     saveLocalMatches(newMatches);
-    pushCloudData('', newMatches);
+    pushCloudData(newMatches, telegramSettings || getLocalTelegramSettings());
   };
 
   // Fetch initial data safely
@@ -83,10 +84,16 @@ export default function App() {
         currentMatches = getLocalMatches();
       }
 
-      // Check cloud database for pre-filled multi-device updates
-      const cloudRes = await syncCloudData('', currentMatches);
-      if (cloudRes.success && cloudRes.remoteMatches && cloudRes.remoteMatches.length > 0) {
-        currentMatches = cloudRes.remoteMatches;
+      // Check global cloud database so any device or incognito tab sees the same matches & tasks
+      const cloudRes = await syncCloudData();
+      if (cloudRes.success) {
+        if (cloudRes.remoteMatches && cloudRes.remoteMatches.length > 0) {
+          currentMatches = mergeMatchesPreservingTasks(currentMatches, cloudRes.remoteMatches);
+        }
+        if (cloudRes.remoteTelegram && cloudRes.remoteTelegram.botToken) {
+          setTelegramSettings(cloudRes.remoteTelegram);
+          saveLocalTelegramSettings(cloudRes.remoteTelegram);
+        }
       }
 
       setMatches(currentMatches);
@@ -107,11 +114,12 @@ export default function App() {
         });
       }
 
-      if (configRes.ok && configRes.data) {
+      if (configRes.ok && configRes.data && configRes.data.botToken) {
         setTelegramSettings(configRes.data);
         saveLocalTelegramSettings(configRes.data);
       } else {
-        setTelegramSettings(getLocalTelegramSettings());
+        const local = getLocalTelegramSettings();
+        if (local.botToken) setTelegramSettings(local);
       }
 
       if (logsRes.ok && Array.isArray(logsRes.data)) {
@@ -133,15 +141,24 @@ export default function App() {
   useEffect(() => {
     fetchData();
 
-    // Auto-poll cloud every 8 seconds so any device opening the link gets real-time task updates
+    // Auto-poll cloud every 5 seconds so any device opening the link gets real-time sync
     const interval = setInterval(() => {
       syncCloudData().then((res) => {
-        if (res.success && res.remoteMatches && res.remoteMatches.length > 0) {
-          setMatches(res.remoteMatches);
-          saveLocalMatches(res.remoteMatches);
+        if (res.success) {
+          if (res.remoteMatches && res.remoteMatches.length > 0) {
+            setMatches(prevMatches => {
+              const merged = mergeMatchesPreservingTasks(prevMatches, res.remoteMatches);
+              saveLocalMatches(merged);
+              return merged;
+            });
+          }
+          if (res.remoteTelegram && res.remoteTelegram.botToken) {
+            setTelegramSettings(res.remoteTelegram);
+            saveLocalTelegramSettings(res.remoteTelegram);
+          }
         }
       }).catch(() => {});
-    }, 8000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);
@@ -201,11 +218,11 @@ export default function App() {
 
   // Handlers for Tasks
   const handleToggleTask = async (matchId: string, taskId: string, completed: boolean) => {
-    const updated = matches.map(m => {
+    const updated = (matches || []).map(m => {
       if (m.id === matchId) {
         return {
           ...m,
-          tasks: m.tasks.map(t => t.id === taskId ? { ...t, completed } : t)
+          tasks: (m.tasks || []).map(t => t.id === taskId ? { ...t, completed } : t)
         };
       }
       return m;
@@ -227,9 +244,9 @@ export default function App() {
       completed: false
     };
 
-    const updated = matches.map(m => {
+    const updated = (matches || []).map(m => {
       if (m.id === matchId) {
-        return { ...m, tasks: [...m.tasks, newTask] };
+        return { ...m, tasks: [...(m.tasks || []), newTask] };
       }
       return m;
     });
@@ -245,9 +262,9 @@ export default function App() {
   };
 
   const handleDeleteTask = async (matchId: string, taskId: string) => {
-    const updated = matches.map(m => {
+    const updated = (matches || []).map(m => {
       if (m.id === matchId) {
-        return { ...m, tasks: m.tasks.filter(t => t.id !== taskId) };
+        return { ...m, tasks: (m.tasks || []).filter(t => t.id !== taskId) };
       }
       return m;
     });
@@ -305,6 +322,7 @@ export default function App() {
     };
     saveLocalTelegramSettings(newSettings);
     setTelegramSettings(newSettings);
+    pushCloudData(matches, newSettings);
 
     const res = await safeFetchJson('/api/telegram/config', {
       method: 'POST',
@@ -313,9 +331,9 @@ export default function App() {
     });
 
     if (res.ok) {
-      showToast('Configurações e agendamento salvos com sucesso!');
+      showToast('Configurações e agendamento salvos na nuvem com sucesso!');
     } else {
-      showToast('Configurações salvas localmente!');
+      showToast('Configurações e agendamento salvos localmente e na nuvem!');
     }
 
     setStatus(prev => prev ? {
@@ -333,18 +351,87 @@ export default function App() {
   };
 
   const handleSendTestNotification = async (customMessage?: string, matchId?: string) => {
-    const res = await safeFetchJson<{ success: boolean; message: string }>('/api/telegram/test', {
+    const token = telegramSettings?.botToken || getLocalTelegramSettings().botToken;
+    const chatId = telegramSettings?.chatId || getLocalTelegramSettings().chatId;
+
+    if (!token || !chatId) {
+      throw new Error('Bot Token ou Chat ID do Telegram não foram preenchidos. Clique em "Configurar" e insira suas credenciais do Telegram.');
+    }
+
+    // Try server API first
+    try {
+      const res = await safeFetchJson<{ success: boolean; message: string }>('/api/telegram/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customMessage,
+          matchId,
+          customToken: token,
+          customChatId: chatId
+        })
+      });
+
+      if (res.ok) {
+        showToast('Mensagem enviada no Telegram com sucesso! 🇭🇺');
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('Tentando envio direto via Telegram API...', e);
+    }
+
+    // Fallback: Direct Telegram Bot API call from browser
+    let textToSend = customMessage;
+    if (!textToSend && matchId) {
+      const m = (matches || []).find(match => match.id === matchId);
+      if (m) {
+        const mTasks = m.tasks || [];
+        const pending = mTasks.filter(t => !t.completed);
+        textToSend = `🇭🇺 <b>HOJE TEM FLUMINENSE!</b> ⚽\n\n` +
+          `🛡️ <b>Fluminense vs ${m.opponent}</b>\n` +
+          `🏆 <b>Competição:</b> ${m.competition}\n` +
+          `⏰ <b>Horário:</b> ${m.time}\n` +
+          `📍 <b>Local:</b> ${m.location}\n\n` +
+          `📋 <b>CHECKLIST DE TAREFAS (${mTasks.filter(t => t.completed).length}/${mTasks.length}):</b>\n` +
+          (mTasks.length > 0
+            ? mTasks.map(t => `${t.completed ? '✅' : '⏳'} ${t.text}`).join('\n')
+            : '<i>Nenhuma tarefa cadastrada para este jogo.</i>') +
+          (pending.length > 0 ? `\n\n⚠️ <b>Atenção:</b> Você possui ${pending.length} tarefa(s) pendente(s)!` : '') +
+          `\n\n🔥 <b>VAMOS, TRICOLOR! VENCER OU VENCER!</b> 🇭🇺`;
+      }
+    }
+
+    if (!textToSend) {
+      textToSend = `🇭🇺 <b>TESTE DE INTEGRAÇÃO - FLUREMIND</b> 🇭🇺\n\n` +
+        `Olá! Seu Bot do Telegram foi configurado com sucesso para enviar lembretes dos jogos do <b>Fluminense FC</b>! ⚽\n\n` +
+        `⏰ <b>Agendamento Automático:</b> Ativo!\n` +
+        `🔥 <b>Saudações Tricolores!</b> 🛡️`;
+    }
+
+    const telegramUrl = `https://api.telegram.org/bot${token}/sendMessage`;
+    const teleRes = await fetch(telegramUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customMessage, matchId })
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: textToSend,
+        parse_mode: 'HTML'
+      })
     });
 
-    if (!res.ok) {
-      throw new Error(res.error || 'Não foi possível enviar mensagem. Verifique se o Bot Token e Chat ID do Telegram estão salvos.');
+    const teleData = await teleRes.json();
+    if (!teleRes.ok || !teleData.ok) {
+      const desc = teleData.description || 'Falha na API do Telegram';
+      if (desc.includes('chat not found')) {
+        throw new Error('Chat do Telegram não encontrado! Abra o seu bot no Telegram e clique em "COMEÇAR" (/start) primeiro para autorizá-lo.');
+      }
+      if (desc.includes('Unauthorized') || desc.includes('Not Found')) {
+        throw new Error('Token do Bot inválido! Verifique a chave gerada com o @BotFather no Telegram.');
+      }
+      throw new Error(`Telegram: ${desc}`);
     }
 
     showToast('Mensagem enviada no Telegram com sucesso! 🇭🇺');
-    return res.data;
+    return teleData;
   };
 
   const handleTriggerTodayCron = async () => {
@@ -377,15 +464,18 @@ export default function App() {
 
   // Find next upcoming match
   const todayStr = new Date().toISOString().split('T')[0];
-  const upcomingMatches = [...matches]
-    .filter(m => m.date >= todayStr)
-    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+  const safeMatchesList = Array.isArray(matches) ? matches : [];
+  const upcomingMatches = [...safeMatchesList]
+    .filter(m => m && m.date && m.date >= todayStr)
+    .sort((a, b) => `${a.date || ''}T${a.time || '00:00'}`.localeCompare(`${b.date || ''}T${b.time || '00:00'}`));
   
-  const nextMatch = upcomingMatches[0] || matches[0] || null;
+  const nextMatch = upcomingMatches[0] || safeMatchesList[0] || null;
 
   // Filter and sort matches by date
-  const filteredMatches = matches
+  const filteredMatches = safeMatchesList
     .filter(m => {
+      if (!m) return false;
+
       // Venue filter
       if (selectedVenue === 'Casa' && !m.isHome) return false;
       if (selectedVenue === 'Fora' && m.isHome) return false;
@@ -395,19 +485,19 @@ export default function App() {
 
       // Period filter
       if (selectedPeriod === 'Hoje' && m.date !== todayStr) return false;
-      if (selectedPeriod === 'Próximos' && m.date < todayStr) return false;
-      if (selectedPeriod === 'Passados' && m.date >= todayStr) return false;
+      if (selectedPeriod === 'Próximos' && (!m.date || m.date < todayStr)) return false;
+      if (selectedPeriod === 'Passados' && (!m.date || m.date >= todayStr)) return false;
 
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchText = `${m.opponent} ${m.competition} ${m.location} ${m.notes || ''}`.toLowerCase();
+        const matchText = `${m.opponent || ''} ${m.competition || ''} ${m.location || ''} ${m.notes || ''}`.toLowerCase();
         if (!matchText.includes(q)) return false;
       }
 
       return true;
     })
-    .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
+    .sort((a, b) => `${a.date || ''}T${a.time || '00:00'}`.localeCompare(`${b.date || ''}T${b.time || '00:00'}`));
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900 font-sans pb-16">

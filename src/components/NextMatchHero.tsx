@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, Send, CheckCircle2, AlertCircle, Shield, Sparkles } from 'lucide-react';
 import { Match } from '../types';
+import { formatMatchTeams } from '../utils/teamLogos';
 
 interface NextMatchHeroProps {
   match: Match | null;
@@ -54,8 +55,9 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
     );
   }
 
-  const completedTasks = match.tasks.filter(t => t.completed).length;
-  const totalTasks = match.tasks.length;
+  const tasks = match.tasks || [];
+  const completedTasks = tasks.filter(t => t.completed).length;
+  const totalTasks = tasks.length;
   const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
@@ -88,28 +90,55 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-3xl font-black font-serif tracking-tight">FLUMINENSE</span>
-              <span className="text-2xl font-bold text-[#e6b800]">VS</span>
-              <span className="text-3xl font-black font-serif text-amber-100">{match.opponent.toUpperCase()}</span>
-            </div>
-          </div>
+          {(() => {
+            const { homeTeam, homeLogo, homeIsFlu, awayTeam, awayLogo, awayIsFlu } = formatMatchTeams(match);
+            return (
+              <div className="flex items-center gap-3 flex-wrap py-1">
+                {/* Mandante (Escudo ANTES) */}
+                <div className="flex items-center gap-2">
+                  <img
+                    src={homeLogo}
+                    alt={homeTeam}
+                    className="w-8 h-8 sm:w-10 sm:h-10 object-contain shrink-0 bg-white/10 rounded-full p-1 border border-white/20"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                  <span className={`text-2xl sm:text-3xl font-black font-serif tracking-tight ${homeIsFlu ? 'text-white' : 'text-amber-100'}`}>
+                    {homeTeam}
+                  </span>
+                </div>
+
+                <span className="text-xl sm:text-2xl font-bold text-[#e6b800] px-1">VS</span>
+
+                {/* Visitante (Escudo APÓS) */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl sm:text-3xl font-black font-serif tracking-tight ${awayIsFlu ? 'text-white' : 'text-amber-100'}`}>
+                    {awayTeam}
+                  </span>
+                  <img
+                    src={awayLogo}
+                    alt={awayTeam}
+                    className="w-8 h-8 sm:w-10 sm:h-10 object-contain shrink-0 bg-white/10 rounded-full p-1 border border-white/20"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-stone-200">
             <div className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10">
               <Calendar className="w-3.5 h-3.5 text-[#e6b800]" />
-              <span>{match.date.split('-').reverse().join('/')}</span>
+              <span>{match.date ? match.date.split('-').reverse().join('/') : 'Data a definir'}</span>
             </div>
 
             <div className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10">
               <Clock className="w-3.5 h-3.5 text-[#e6b800]" />
-              <span>{match.time} hrs</span>
+              <span>{match.time || '16:00'} hrs</span>
             </div>
 
             <div className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10">
               <MapPin className="w-3.5 h-3.5 text-[#e6b800]" />
-              <span>{match.location}</span>
+              <span>{match.location || 'Maracanã'}</span>
             </div>
           </div>
 

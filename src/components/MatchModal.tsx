@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, MapPin } from 'lucide-react';
 import { Match, Competition } from '../types';
+import { formatOpponentName } from '../utils/teamLogos';
 
 interface MatchModalProps {
   isOpen: boolean;
@@ -50,7 +51,7 @@ export const MatchModal: React.FC<MatchModalProps> = ({
     if (!opponent.trim()) return;
 
     onSave({
-      opponent: opponent.trim(),
+      opponent: formatOpponentName(opponent.trim()),
       date,
       time,
       competition,
