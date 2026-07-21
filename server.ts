@@ -42,7 +42,12 @@ function ensureDb(): DbSchema {
   try {
     const content = fs.readFileSync(DB_FILE, 'utf-8');
     const data = JSON.parse(content) as DbSchema;
-    if (!data.matches) data.matches = INITIAL_MATCHES;
+    if (!data.matches || data.matches.length === 0) {
+      data.matches = INITIAL_MATCHES;
+    } else {
+      // Force all matches to Mandante Fluminense
+      data.matches = data.matches.map(m => ({ ...m, isHome: true }));
+    }
     if (!data.telegramSettings) {
       data.telegramSettings = {
         botToken: process.env.TELEGRAM_BOT_TOKEN || '',

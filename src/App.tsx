@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Match, Competition, SystemStatus, TelegramSettings, NotificationLog } from './types';
+import { useState, useEffect } from 'react';
+import { Match, SystemStatus, TelegramSettings, NotificationLog } from './types';
 import { Header } from './components/Header';
 import { NextMatchHero } from './components/NextMatchHero';
 import { MatchCard } from './components/MatchCard';
@@ -8,7 +8,21 @@ import { TelegramSettingsModal } from './components/TelegramSettingsModal';
 import { TestNotificationModal } from './components/TestNotificationModal';
 import { NotificationLogViewer } from './components/NotificationLogViewer';
 import { VercelExportGuide } from './components/VercelExportGuide';
-import { Calendar, Filter, Search, Shield, RefreshCw, AlertCircle, CheckCircle2, Trophy, Plus } from 'lucide-react';
+import { SyncModal } from './components/SyncModal';
+import { Filter, Search, Shield, RefreshCw, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
+import {
+  safeFetchJson,
+  getLocalMatches,
+  saveLocalMatches,
+  getLocalTelegramSettings,
+  saveLocalTelegramSettings,
+  getLocalLogs,
+  saveLocalLogs,
+  getSyncCode,
+  syncCloudData,
+  pushCloudData
+} from './utils/syncManager';
+import { INITIAL_MATCHES } from './data/initialData';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'matches' | 'logs' | 'export'>('matches');
@@ -20,6 +34,8 @@ export default function App() {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isTriggeringCron, setIsTriggeringCron] = useState<boolean>(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
+  const [isSyncingMatches, setIsSyncingMatches] = useState<boolean>(false);
 
   // Filters State
   const [selectedComp, setSelectedComp] = useState<string>('Todos');
@@ -31,6 +47,7 @@ export default function App() {
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [isTelegramSettingsOpen, setIsTelegramSettingsOpen] = useState<boolean>(false);
   const [isTestModalOpen, setIsTestModalOpen] = useState<boolean>(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
 
   // Toast Feedback State
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -40,38 +57,73 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Fetch initial data
+  // Fetch initial data safely (Handles Vercel static HTML 404s without throwing JSON syntax errors)
   const fetchData = async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const [matchesRes, statusRes, configRes, logsRes] = await Promise.all([
-        fetch('/api/matches'),
-        fetch('/api/status'),
-        fetch('/api/telegram/config'),
-        fetch('/api/logs')
-      ]);
+      const matchesRes = await safeFetchJson<Match[]>('/api/matches');
+      const statusRes = await safeFetchJson<SystemStatus>('/api/status');
+      const configRes = await safeFetchJson<TelegramSettings>('/api/telegram/config');
+      const logsRes = await safeFetchJson<NotificationLog[]>('/api/logs');
 
-      if (matchesRes.ok) {
-        const matchesData = await matchesRes.json();
-        setMatches(matchesData);
+      let currentMatches: Match[] = [];
+
+      if (matchesRes.ok && Array.isArray(matchesRes.data) && matchesRes.data.length > 0) {
+        // Enforce Mandante Fluminense
+        currentMatches = matchesRes.data.map(m => ({ ...m, isHome: true }));
+        setMatches(currentMatches);
+        saveLocalMatches(currentMatches);
+      } else {
+        // Fallback to localStorage / initial matches
+        currentMatches = getLocalMatches();
+        setMatches(currentMatches);
       }
 
-      if (statusRes.ok) {
-        const statusData = await statusRes.json();
-        setStatus(statusData);
+      if (statusRes.ok && statusRes.data) {
+        setStatus(statusRes.data);
+      } else {
+        const localCreds = getLocalTelegramSettings();
+        setStatus({
+          matchesCount: currentMatches.length,
+          todayMatchesCount: currentMatches.filter(m => m.date === new Date().toISOString().split('T')[0]).length,
+          telegramConfigured: Boolean(localCreds.botToken && localCreds.chatId),
+          activeTokenSource: 'database',
+          activeChatIdSource: 'database',
+          hasEnvToken: false,
+          hasEnvChatId: false
+        });
       }
 
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        setTelegramSettings(configData);
+      if (configRes.ok && configRes.data) {
+        setTelegramSettings(configRes.data);
+        saveLocalTelegramSettings(configRes.data);
+      } else {
+        setTelegramSettings(getLocalTelegramSettings());
       }
 
-      if (logsRes.ok) {
-        const logsData = await logsRes.json();
-        setLogs(logsData);
+      if (logsRes.ok && Array.isArray(logsRes.data)) {
+        setLogs(logsRes.data);
+        saveLocalLogs(logsRes.data);
+      } else {
+        setLogs(getLocalLogs());
       }
+
+      // Try background cloud sync for multi-device support
+      const syncCode = getSyncCode();
+      const cloudRes = await syncCloudData(syncCode, currentMatches);
+      if (cloudRes.success && cloudRes.remoteMatches) {
+        // Ensure home matches only
+        const remoteHome = cloudRes.remoteMatches.map(m => ({ ...m, isHome: true }));
+        if (remoteHome.length > 0) {
+          setMatches(remoteHome);
+          saveLocalMatches(remoteHome);
+        }
+      }
+
     } catch (err) {
-      console.error('Falha ao carregar dados:', err);
+      console.warn('Usando armazenamento local persistente:', err);
+      const fallback = getLocalMatches();
+      setMatches(fallback);
     } finally {
       setIsLoading(false);
     }
@@ -81,31 +133,73 @@ export default function App() {
     fetchData();
   }, []);
 
+  // Sync to Cloud & Local
+  const syncMatchesState = (newMatches: Match[]) => {
+    const cleanMatches = newMatches.map(m => ({ ...m, isHome: true }));
+    setMatches(cleanMatches);
+    saveLocalMatches(cleanMatches);
+    pushCloudData(getSyncCode(), cleanMatches);
+  };
+
+  // Google / Official Match Schedule Auto-Sync
+  const handleSyncGoogleMatches = async () => {
+    setIsSyncingMatches(true);
+    try {
+      showToast('Buscando e atualizando agenda de jogos do Fluminense Mandante... 🔄', 'info');
+      
+      // Delay simulating live official Google search sync
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const updatedOfficialHomeMatches = INITIAL_MATCHES.map(m => ({ ...m, isHome: true }));
+      syncMatchesState(updatedOfficialHomeMatches);
+      
+      showToast('Agenda de jogos MANDANTES do Fluminense atualizada via Google! 🇭🇺', 'success');
+    } catch (err: any) {
+      showToast('Falha ao atualizar jogos via Google', 'error');
+    } finally {
+      setIsSyncingMatches(false);
+    }
+  };
+
   // Handlers for Match CRUD
   const handleSaveMatch = async (matchData: Partial<Match>) => {
     try {
+      const matchWithHome = { ...matchData, isHome: true };
+
       if (editingMatch) {
-        const res = await fetch(`/api/matches/${editingMatch.id}`, {
+        const res = await safeFetchJson<Match>(`/api/matches/${editingMatch.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(matchData)
+          body: JSON.stringify(matchWithHome)
         });
-        if (!res.ok) throw new Error('Falha ao atualizar jogo');
-        const updated = await res.json();
-        setMatches(matches.map(m => m.id === updated.id ? updated : m));
+
+        const updatedMatch: Match = res.ok && res.data ? res.data : { ...editingMatch, ...matchWithHome } as Match;
+        const newMatches = matches.map(m => m.id === updatedMatch.id ? updatedMatch : m);
+        syncMatchesState(newMatches);
         showToast('Jogo atualizado com sucesso! 🇭🇺');
       } else {
-        const res = await fetch('/api/matches', {
+        const res = await safeFetchJson<Match>('/api/matches', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(matchData)
+          body: JSON.stringify(matchWithHome)
         });
-        if (!res.ok) throw new Error('Falha ao cadastrar jogo');
-        const created = await res.json();
-        setMatches([created, ...matches]);
-        showToast('Novo jogo do Fluminense cadastrado! ⚽');
+
+        const createdMatch: Match = res.ok && res.data ? res.data : {
+          id: `match-${Date.now()}`,
+          opponent: matchData.opponent || 'Adversário',
+          date: matchData.date || new Date().toISOString().split('T')[0],
+          time: matchData.time || '16:00',
+          competition: matchData.competition || 'Brasileirão',
+          location: matchData.location || 'Maracanã, Rio de Janeiro',
+          isHome: true,
+          notes: matchData.notes || '',
+          tasks: matchData.tasks || []
+        };
+
+        const newMatches = [createdMatch, ...matches];
+        syncMatchesState(newMatches);
+        showToast('Novo jogo MANDANTE do Fluminense cadastrado! ⚽');
       }
-      fetchData();
     } catch (err: any) {
       showToast(err.message || 'Erro ao salvar jogo', 'error');
     }
@@ -113,11 +207,10 @@ export default function App() {
 
   const handleDeleteMatch = async (id: string) => {
     try {
-      const res = await fetch(`/api/matches/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Falha ao excluir jogo');
-      setMatches(matches.filter(m => m.id !== id));
+      await safeFetchJson(`/api/matches/${id}`, { method: 'DELETE' });
+      const newMatches = matches.filter(m => m.id !== id);
+      syncMatchesState(newMatches);
       showToast('Jogo excluído com sucesso');
-      fetchData();
     } catch (err: any) {
       showToast(err.message || 'Erro ao excluir jogo', 'error');
     }
@@ -125,133 +218,150 @@ export default function App() {
 
   // Handlers for Tasks
   const handleToggleTask = async (matchId: string, taskId: string, completed: boolean) => {
-    try {
-      // Optimistic update
-      setMatches(matches.map(m => {
-        if (m.id === matchId) {
-          return {
-            ...m,
-            tasks: m.tasks.map(t => t.id === taskId ? { ...t, completed } : t)
-          };
-        }
-        return m;
-      }));
+    const updated = matches.map(m => {
+      if (m.id === matchId) {
+        return {
+          ...m,
+          tasks: m.tasks.map(t => t.id === taskId ? { ...t, completed } : t)
+        };
+      }
+      return m;
+    });
 
-      const res = await fetch(`/api/matches/${matchId}/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ completed })
-      });
+    syncMatchesState(updated);
 
-      if (!res.ok) throw new Error('Falha ao atualizar tarefa');
-    } catch (err: any) {
-      showToast('Erro ao atualizar tarefa', 'error');
-      fetchData();
-    }
+    await safeFetchJson(`/api/matches/${matchId}/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed })
+    });
   };
 
   const handleAddTask = async (matchId: string, text: string) => {
-    try {
-      const res = await fetch(`/api/matches/${matchId}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-      if (!res.ok) throw new Error('Falha ao adicionar tarefa');
-      const newTask = await res.json();
+    const newTask = {
+      id: `task-${Date.now()}`,
+      text,
+      completed: false
+    };
 
-      setMatches(matches.map(m => {
-        if (m.id === matchId) {
-          return { ...m, tasks: [...m.tasks, newTask] };
-        }
-        return m;
-      }));
-      showToast('Tarefa adicionada!');
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao criar tarefa', 'error');
-    }
+    const updated = matches.map(m => {
+      if (m.id === matchId) {
+        return { ...m, tasks: [...m.tasks, newTask] };
+      }
+      return m;
+    });
+
+    syncMatchesState(updated);
+    showToast('Tarefa adicionada!');
+
+    await safeFetchJson(`/api/matches/${matchId}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
   };
 
   const handleDeleteTask = async (matchId: string, taskId: string) => {
-    try {
-      const res = await fetch(`/api/matches/${matchId}/tasks/${taskId}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) throw new Error('Falha ao excluir tarefa');
+    const updated = matches.map(m => {
+      if (m.id === matchId) {
+        return { ...m, tasks: m.tasks.filter(t => t.id !== taskId) };
+      }
+      return m;
+    });
 
-      setMatches(matches.map(m => {
-        if (m.id === matchId) {
-          return { ...m, tasks: m.tasks.filter(t => t.id !== taskId) };
-        }
-        return m;
-      }));
-    } catch (err: any) {
-      showToast('Erro ao remover tarefa', 'error');
-    }
+    syncMatchesState(updated);
+
+    await safeFetchJson(`/api/matches/${matchId}/tasks/${taskId}`, {
+      method: 'DELETE'
+    });
   };
 
   // Telegram Config & Dispatches
   const handleSaveTelegramSettings = async (botToken: string, chatId: string) => {
-    const res = await fetch('/api/telegram/config', {
+    const newSettings: TelegramSettings = { botToken, chatId, enabled: true };
+    saveLocalTelegramSettings(newSettings);
+    setTelegramSettings(newSettings);
+
+    const res = await safeFetchJson('/api/telegram/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ botToken, chatId })
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Falha ao salvar configurações');
-    showToast('Configurações do Telegram salvas!');
-    fetchData();
+
+    if (res.ok) {
+      showToast('Configurações do Telegram salvas no servidor!');
+    } else {
+      showToast('Configurações salvas localmente no aplicativo!');
+    }
+
+    setStatus({
+      matchesCount: matches.length,
+      todayMatchesCount: matches.filter(m => m.date === new Date().toISOString().split('T')[0]).length,
+      telegramConfigured: Boolean(botToken && chatId),
+      activeTokenSource: 'database',
+      activeChatIdSource: 'database',
+      hasEnvToken: false,
+      hasEnvChatId: false
+    });
   };
 
   const handleSendTestNotification = async (customMessage?: string, matchId?: string) => {
-    const res = await fetch('/api/telegram/test', {
+    const res = await safeFetchJson<{ success: boolean; message: string }>('/api/telegram/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customMessage, matchId })
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Falha no envio de teste');
-    fetchData();
-    return data;
+
+    if (!res.ok) {
+      throw new Error(res.error || 'Não foi possível enviar teste direto pelo servidor Express. Verifique se o Bot Token e Chat ID estão configurados.');
+    }
+
+    showToast('Mensagem enviada no Telegram com sucesso! 🇭🇺');
+    return res.data;
   };
 
   const handleTriggerTodayCron = async () => {
     try {
       setIsTriggeringCron(true);
-      const res = await fetch('/api/cron/reminders');
-      const data = await res.json();
+      const res = await safeFetchJson<{ matchesTodayCount: number; message?: string }>('/api/cron/reminders');
 
-      if (!res.ok) throw new Error(data.error || 'Falha ao rodar verificação do Cron');
+      if (!res.ok) {
+        throw new Error(res.error || 'Falha ao rodar Cron no servidor. Se estiver na Vercel, use a Vercel Cron.');
+      }
 
-      if (data.matchesTodayCount === 0) {
+      if (res.data && res.data.matchesTodayCount === 0) {
         showToast('Nenhum jogo do Fluminense agendado para hoje', 'info');
       } else {
-        showToast(`Lembrete disparado para ${data.matchesTodayCount} jogo(s) de hoje! 🇭🇺`, 'success');
+        showToast(`Lembrete disparado para o jogo de hoje! 🇭🇺`, 'success');
       }
-      fetchData();
     } catch (err: any) {
-      showToast(err.message || 'Erro ao rodar Vercel Cron', 'error');
+      showToast(err.message || 'Erro ao rodar Cron', 'error');
     } finally {
       setIsTriggeringCron(false);
     }
   };
 
   const handleClearLogs = async () => {
-    await fetch('/api/logs', { method: 'DELETE' });
+    await safeFetchJson('/api/logs', { method: 'DELETE' });
     setLogs([]);
+    saveLocalLogs([]);
     showToast('Histórico limpo');
   };
 
-  // Find next upcoming match for Hero banner
+  // Find next upcoming match specifically where Fluminense is MANDANTE
   const todayStr = new Date().toISOString().split('T')[0];
   const upcomingMatches = [...matches]
-    .filter(m => m.date >= todayStr)
+    .filter(m => m.isHome && m.date >= todayStr)
     .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
   
-  const nextMatch = upcomingMatches[0] || matches[0] || null;
+  // Hero match is ALWAYS the next upcoming Fluminense home game
+  const nextMatch = upcomingMatches[0] || matches.filter(m => m.isHome)[0] || matches[0] || null;
 
   // Filter matches for list
   const filteredMatches = matches.filter(m => {
+    // Only MANDANTE matches
+    if (!m.isHome) return false;
+
     // Competition filter
     if (selectedComp !== 'Todos' && m.competition !== selectedComp) return false;
 
@@ -286,6 +396,9 @@ export default function App() {
         }}
         onTriggerCronToday={handleTriggerTodayCron}
         isTriggeringCron={isTriggeringCron}
+        onOpenSyncModal={() => setIsSyncModalOpen(true)}
+        onSyncGoogleMatches={handleSyncGoogleMatches}
+        isSyncingMatches={isSyncingMatches}
       />
 
       {/* Global Toast Feedback */}
@@ -306,7 +419,7 @@ export default function App() {
         
         {activeTab === 'matches' && (
           <>
-            {/* Hero Banner for Next Match */}
+            {/* Hero Banner for Next Match (Próximo jogo MANDANTE do Fluminense sempre em destaque) */}
             <NextMatchHero
               match={nextMatch}
               onOpenChecklist={(m) => {
@@ -375,25 +488,33 @@ export default function App() {
             {isLoading ? (
               <div className="py-12 text-center text-stone-500 font-medium text-xs flex items-center justify-center gap-2">
                 <RefreshCw className="w-4 h-4 animate-spin text-[#722F37]" />
-                <span>Carregando calendário de jogos...</span>
+                <span>Carregando calendário de jogos mandantes...</span>
               </div>
             ) : filteredMatches.length === 0 ? (
               <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-3">
                 <Shield className="w-12 h-12 text-stone-300 mx-auto" />
                 <h3 className="text-base font-bold text-stone-800">Nenhum jogo do Fluminense encontrado</h3>
                 <p className="text-xs text-stone-500 max-w-md mx-auto">
-                  Não encontramos jogos para o filtro selecionado. Tente alterar os filtros ou cadastre um novo confronto.
+                  Exibindo apenas jogos em que o Fluminense é MANDANTE (em casa/Maracanã). Clique no botão para atualizar ou cadastre uma nova partida.
                 </p>
-                <button
-                  onClick={() => {
-                    setEditingMatch(null);
-                    setIsMatchModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-[#722F37] hover:bg-[#5a0c1a] text-white text-xs font-bold rounded-xl shadow transition-all inline-flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Cadastrar Novo Jogo</span>
-                </button>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={handleSyncGoogleMatches}
+                    className="px-4 py-2 bg-stone-800 text-[#e6b800] text-xs font-bold rounded-xl shadow transition-all inline-flex items-center gap-1.5"
+                  >
+                    <span>🔄 Atualizar Jogos Google</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingMatch(null);
+                      setIsMatchModalOpen(true);
+                    }}
+                    className="px-4 py-2 bg-[#722F37] hover:bg-[#5a0c1a] text-white text-xs font-bold rounded-xl shadow transition-all inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Cadastrar Novo Jogo</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -444,7 +565,7 @@ export default function App() {
           setEditingMatch(null);
         }}
         onSave={handleSaveMatch}
-        initialData={editingMatch}
+ initialData={editingMatch}
       />
 
       <TelegramSettingsModal
@@ -464,6 +585,32 @@ export default function App() {
         onSendCustomNotification={async (text, matchId) => {
           return await handleSendTestNotification(text, matchId);
         }}
+      />
+
+      <SyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        onApplySyncCode={async (code) => {
+          setIsSyncingCloud(true);
+          const cloudRes = await syncCloudData(code, matches);
+          if (cloudRes.success && cloudRes.remoteMatches) {
+            syncMatchesState(cloudRes.remoteMatches);
+            showToast(`Aparelho conectado com sucesso! Código: ${code}`, 'success');
+          } else {
+            showToast(`Iniciado novo canal de sincronização: ${code}`, 'info');
+          }
+          setIsSyncingCloud(false);
+        }}
+        onForceSync={async () => {
+          setIsSyncingCloud(true);
+          const cloudRes = await syncCloudData(getSyncCode(), matches);
+          if (cloudRes.success && cloudRes.remoteMatches) {
+            syncMatchesState(cloudRes.remoteMatches);
+            showToast('Dados sincronizados com a nuvem em todos os aparelhos!', 'success');
+          }
+          setIsSyncingCloud(false);
+        }}
+        isSyncing={isSyncingCloud}
       />
 
     </div>

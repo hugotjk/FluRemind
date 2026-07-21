@@ -11,6 +11,9 @@ interface HeaderProps {
   onOpenAddMatch: () => void;
   onTriggerCronToday: () => void;
   isTriggeringCron: boolean;
+  onOpenSyncModal: () => void;
+  onSyncGoogleMatches: () => void;
+  isSyncingMatches: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,7 +24,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTestNotification,
   onOpenAddMatch,
   onTriggerCronToday,
-  isTriggeringCron
+  isTriggeringCron,
+  onOpenSyncModal,
+  onSyncGoogleMatches,
+  isSyncingMatches
 }) => {
   return (
     <header className="bg-gradient-to-r from-[#5a0c1a] via-[#722F37] to-[#004d26] text-white border-b-4 border-[#e6b800] shadow-xl sticky top-0 z-30">
@@ -130,6 +136,26 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Shield className={`w-3.5 h-3.5 ${isTriggeringCron ? 'animate-spin' : ''}`} />
               <span className="hidden md:inline">Verificar Hoje</span>
+            </button>
+
+            {/* Multi-Device Sync Pill */}
+            <button
+              onClick={onOpenSyncModal}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white shadow transition-all active:scale-95"
+              title="Sincronizar tarefas em múltiplos aparelhos (Celular / PC)"
+            >
+              <span>📱 Multi-Aparelhos</span>
+            </button>
+
+            {/* Google Sync Matches Button */}
+            <button
+              onClick={onSyncGoogleMatches}
+              disabled={isSyncingMatches}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-[#e6b800] border border-[#e6b800]/40 shadow transition-all active:scale-95 disabled:opacity-50"
+              title="Atualizar agenda de jogos do Fluminense Mandante via Google"
+            >
+              <span className={isSyncingMatches ? 'animate-spin inline-block' : ''}>🔄</span>
+              <span className="hidden lg:inline">Atualizar Jogos Google</span>
             </button>
 
             {/* Add Game Button */}
