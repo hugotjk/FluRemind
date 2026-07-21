@@ -8,7 +8,6 @@ import { TelegramSettingsModal } from './components/TelegramSettingsModal';
 import { TestNotificationModal } from './components/TestNotificationModal';
 import { NotificationLogViewer } from './components/NotificationLogViewer';
 import { VercelExportGuide } from './components/VercelExportGuide';
-import { SyncModal } from './components/SyncModal';
 import { Filter, Search, Shield, RefreshCw, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import {
   safeFetchJson,
@@ -18,7 +17,6 @@ import {
   saveLocalTelegramSettings,
   getLocalLogs,
   saveLocalLogs,
-  getSyncCode,
   syncCloudData,
   pushCloudData
 } from './utils/syncManager';
@@ -34,11 +32,10 @@ export default function App() {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isTriggeringCron, setIsTriggeringCron] = useState<boolean>(false);
-  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
-  const [isSyncingMatches, setIsSyncingMatches] = useState<boolean>(false);
 
   // Filters State
   const [selectedComp, setSelectedComp] = useState<string>('Todos');
+  const [selectedVenue, setSelectedVenue] = useState<'Todos' | 'Casa' | 'Fora'>('Todos');
   const [selectedPeriod, setSelectedPeriod] = useState<'Todos' | 'Hoje' | 'Próximos' | 'Passados'>('Todos');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -47,7 +44,6 @@ export default function App() {
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [isTelegramSettingsOpen, setIsTelegramSettingsOpen] = useState<boolean>(false);
   const [isTestModalOpen, setIsTestModalOpen] = useState<boolean>(false);
-  const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
 
   // Toast Feedback State
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -57,7 +53,14 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Fetch initial data safely (Handles Vercel static HTML 404s without throwing JSON syntax errors)
+  // Sync state to Cloud & Local automatically
+  const syncMatchesState = (newMatches: Match[]) => {
+    setMatches(newMatches);
+    saveLocalMatches(newMatches);
+    pushCloudData('', newMatches);
+  };
+
+  // Fetch initial data safely
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -69,15 +72,19 @@ export default function App() {
       let currentMatches: Match[] = [];
 
       if (matchesRes.ok && Array.isArray(matchesRes.data) && matchesRes.data.length > 0) {
-        // Enforce Mandante Fluminense
-        currentMatches = matchesRes.data.map(m => ({ ...m, isHome: true }));
-        setMatches(currentMatches);
-        saveLocalMatches(currentMatches);
+        currentMatches = matchesRes.data;
       } else {
-        // Fallback to localStorage / initial matches
         currentMatches = getLocalMatches();
-        setMatches(currentMatches);
       }
+
+      // Check cloud database for pre-filled multi-device updates
+      const cloudRes = await syncCloudData('', currentMatches);
+      if (cloudRes.success && cloudRes.remoteMatches && cloudRes.remoteMatches.length > 0) {
+        currentMatches = cloudRes.remoteMatches;
+      }
+
+      setMatches(currentMatches);
+      saveLocalMatches(currentMatches);
 
       if (statusRes.ok && statusRes.data) {
         setStatus(statusRes.data);
@@ -108,18 +115,6 @@ export default function App() {
         setLogs(getLocalLogs());
       }
 
-      // Try background cloud sync for multi-device support
-      const syncCode = getSyncCode();
-      const cloudRes = await syncCloudData(syncCode, currentMatches);
-      if (cloudRes.success && cloudRes.remoteMatches) {
-        // Ensure home matches only
-        const remoteHome = cloudRes.remoteMatches.map(m => ({ ...m, isHome: true }));
-        if (remoteHome.length > 0) {
-          setMatches(remoteHome);
-          saveLocalMatches(remoteHome);
-        }
-      }
-
     } catch (err) {
       console.warn('Usando armazenamento local persistente:', err);
       const fallback = getLocalMatches();
@@ -131,74 +126,56 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
+
+    // Auto-poll cloud every 8 seconds so any device opening the link gets real-time task updates
+    const interval = setInterval(() => {
+      syncCloudData().then((res) => {
+        if (res.success && res.remoteMatches && res.remoteMatches.length > 0) {
+          setMatches(res.remoteMatches);
+          saveLocalMatches(res.remoteMatches);
+        }
+      }).catch(() => {});
+    }, 8000);
+
+    return () => clearInterval(interval);
   }, []);
-
-  // Sync to Cloud & Local
-  const syncMatchesState = (newMatches: Match[]) => {
-    const cleanMatches = newMatches.map(m => ({ ...m, isHome: true }));
-    setMatches(cleanMatches);
-    saveLocalMatches(cleanMatches);
-    pushCloudData(getSyncCode(), cleanMatches);
-  };
-
-  // Google / Official Match Schedule Auto-Sync
-  const handleSyncGoogleMatches = async () => {
-    setIsSyncingMatches(true);
-    try {
-      showToast('Buscando e atualizando agenda de jogos do Fluminense Mandante... 🔄', 'info');
-      
-      // Delay simulating live official Google search sync
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const updatedOfficialHomeMatches = INITIAL_MATCHES.map(m => ({ ...m, isHome: true }));
-      syncMatchesState(updatedOfficialHomeMatches);
-      
-      showToast('Agenda de jogos MANDANTES do Fluminense atualizada via Google! 🇭🇺', 'success');
-    } catch (err: any) {
-      showToast('Falha ao atualizar jogos via Google', 'error');
-    } finally {
-      setIsSyncingMatches(false);
-    }
-  };
 
   // Handlers for Match CRUD
   const handleSaveMatch = async (matchData: Partial<Match>) => {
     try {
-      const matchWithHome = { ...matchData, isHome: true };
-
       if (editingMatch) {
         const res = await safeFetchJson<Match>(`/api/matches/${editingMatch.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(matchWithHome)
+          body: JSON.stringify(matchData)
         });
 
-        const updatedMatch: Match = res.ok && res.data ? res.data : { ...editingMatch, ...matchWithHome } as Match;
+        const updatedMatch: Match = res.ok && res.data ? res.data : { ...editingMatch, ...matchData } as Match;
         const newMatches = matches.map(m => m.id === updatedMatch.id ? updatedMatch : m);
         syncMatchesState(newMatches);
         showToast('Jogo atualizado com sucesso! 🇭🇺');
       } else {
-        const res = await safeFetchJson<Match>('/api/matches', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(matchWithHome)
-        });
-
-        const createdMatch: Match = res.ok && res.data ? res.data : {
+        const createdMatch: Match = {
           id: `match-${Date.now()}`,
           opponent: matchData.opponent || 'Adversário',
           date: matchData.date || new Date().toISOString().split('T')[0],
           time: matchData.time || '16:00',
           competition: matchData.competition || 'Brasileirão',
           location: matchData.location || 'Maracanã, Rio de Janeiro',
-          isHome: true,
+          isHome: matchData.isHome ?? true,
           notes: matchData.notes || '',
-          tasks: matchData.tasks || []
+          tasks: [] // Inicia vazia sem sugestões
         };
+
+        await safeFetchJson<Match>('/api/matches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(createdMatch)
+        });
 
         const newMatches = [createdMatch, ...matches];
         syncMatchesState(newMatches);
-        showToast('Novo jogo MANDANTE do Fluminense cadastrado! ⚽');
+        showToast('Novo jogo cadastrado e sincronizado! ⚽');
       }
     } catch (err: any) {
       showToast(err.message || 'Erro ao salvar jogo', 'error');
@@ -210,7 +187,7 @@ export default function App() {
       await safeFetchJson(`/api/matches/${id}`, { method: 'DELETE' });
       const newMatches = matches.filter(m => m.id !== id);
       syncMatchesState(newMatches);
-      showToast('Jogo excluído com sucesso');
+      showToast('Jogo removido com sucesso');
     } catch (err: any) {
       showToast(err.message || 'Erro ao excluir jogo', 'error');
     }
@@ -252,7 +229,7 @@ export default function App() {
     });
 
     syncMatchesState(updated);
-    showToast('Tarefa adicionada!');
+    showToast('Tarefa salva e salva na nuvem! ☁️');
 
     await safeFetchJson(`/api/matches/${matchId}/tasks`, {
       method: 'POST',
@@ -291,7 +268,7 @@ export default function App() {
     if (res.ok) {
       showToast('Configurações do Telegram salvas no servidor!');
     } else {
-      showToast('Configurações salvas localmente no aplicativo!');
+      showToast('Configurações salvas localmente!');
     }
 
     setStatus({
@@ -313,7 +290,7 @@ export default function App() {
     });
 
     if (!res.ok) {
-      throw new Error(res.error || 'Não foi possível enviar teste direto pelo servidor Express. Verifique se o Bot Token e Chat ID estão configurados.');
+      throw new Error(res.error || 'Não foi possível enviar mensagem. Verifique se o Bot Token e Chat ID do Telegram estão salvos.');
     }
 
     showToast('Mensagem enviada no Telegram com sucesso! 🇭🇺');
@@ -348,19 +325,19 @@ export default function App() {
     showToast('Histórico limpo');
   };
 
-  // Find next upcoming match specifically where Fluminense is MANDANTE
+  // Find next upcoming match
   const todayStr = new Date().toISOString().split('T')[0];
   const upcomingMatches = [...matches]
-    .filter(m => m.isHome && m.date >= todayStr)
+    .filter(m => m.date >= todayStr)
     .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
   
-  // Hero match is ALWAYS the next upcoming Fluminense home game
-  const nextMatch = upcomingMatches[0] || matches.filter(m => m.isHome)[0] || matches[0] || null;
+  const nextMatch = upcomingMatches[0] || matches[0] || null;
 
   // Filter matches for list
   const filteredMatches = matches.filter(m => {
-    // Only MANDANTE matches
-    if (!m.isHome) return false;
+    // Venue filter
+    if (selectedVenue === 'Casa' && !m.isHome) return false;
+    if (selectedVenue === 'Fora' && m.isHome) return false;
 
     // Competition filter
     if (selectedComp !== 'Todos' && m.competition !== selectedComp) return false;
@@ -396,9 +373,6 @@ export default function App() {
         }}
         onTriggerCronToday={handleTriggerTodayCron}
         isTriggeringCron={isTriggeringCron}
-        onOpenSyncModal={() => setIsSyncModalOpen(true)}
-        onSyncGoogleMatches={handleSyncGoogleMatches}
-        isSyncingMatches={isSyncingMatches}
       />
 
       {/* Global Toast Feedback */}
@@ -419,36 +393,63 @@ export default function App() {
         
         {activeTab === 'matches' && (
           <>
-            {/* Hero Banner for Next Match (Próximo jogo MANDANTE do Fluminense sempre em destaque) */}
-            <NextMatchHero
-              match={nextMatch}
-              onOpenChecklist={(m) => {
-                setEditingMatch(m);
-                setIsMatchModalOpen(true);
-              }}
-              onTestTelegramMatch={(m) => {
-                handleSendTestNotification(undefined, m.id)
-                  .then(() => showToast(`Notificação enviada para o jogo contra o ${m.opponent}! 🇭🇺`))
-                  .catch((err) => showToast(err.message, 'error'));
-              }}
-            />
+            {/* Hero Banner for Next Match */}
+            {nextMatch && (
+              <NextMatchHero
+                match={nextMatch}
+                onOpenChecklist={(m) => {
+                  setEditingMatch(m);
+                  setIsMatchModalOpen(true);
+                }}
+                onTestTelegramMatch={(m) => {
+                  handleSendTestNotification(undefined, m.id)
+                    .then(() => showToast(`Notificação enviada para o jogo contra o ${m.opponent}! 🇭🇺`))
+                    .catch((err) => showToast(err.message, 'error'));
+                }}
+              />
+            )}
 
             {/* Filter and Search Bar */}
             <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
               
-              {/* Competition Filter */}
+              {/* Competition & Venue Filters */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
                 <span className="text-xs font-bold text-stone-400 flex items-center gap-1 mr-1">
                   <Filter className="w-3.5 h-3.5" /> Filtrar:
                 </span>
 
-                {['Todos', 'Brasileirão', 'Copa Libertadores', 'Copa do Brasil', 'Campeonato Carioca'].map(comp => (
+                <button
+                  onClick={() => setSelectedVenue('Todos')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    selectedVenue === 'Todos' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  Todos os Jogos
+                </button>
+                <button
+                  onClick={() => setSelectedVenue('Casa')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    selectedVenue === 'Casa' ? 'bg-[#006633] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  🏠 Casa
+                </button>
+                <button
+                  onClick={() => setSelectedVenue('Fora')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    selectedVenue === 'Fora' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  ✈️ Fora
+                </button>
+
+                {['Brasileirão', 'Copa Libertadores', 'Copa do Brasil'].map(comp => (
                   <button
                     key={comp}
-                    onClick={() => setSelectedComp(comp)}
+                    onClick={() => setSelectedComp(selectedComp === comp ? 'Todos' : comp)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                       selectedComp === comp
-                        ? 'bg-[#722F37] text-white shadow-sm'
+                        ? 'bg-amber-600 text-white shadow-sm'
                         : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                     }`}
                   >
@@ -488,33 +489,25 @@ export default function App() {
             {isLoading ? (
               <div className="py-12 text-center text-stone-500 font-medium text-xs flex items-center justify-center gap-2">
                 <RefreshCw className="w-4 h-4 animate-spin text-[#722F37]" />
-                <span>Carregando calendário de jogos mandantes...</span>
+                <span>Carregando jogos e tarefas do Fluminense...</span>
               </div>
             ) : filteredMatches.length === 0 ? (
               <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-3">
                 <Shield className="w-12 h-12 text-stone-300 mx-auto" />
-                <h3 className="text-base font-bold text-stone-800">Nenhum jogo do Fluminense encontrado</h3>
+                <h3 className="text-base font-bold text-stone-800">Nenhum jogo cadastrado nesse filtro</h3>
                 <p className="text-xs text-stone-500 max-w-md mx-auto">
-                  Exibindo apenas jogos em que o Fluminense é MANDANTE (em casa/Maracanã). Clique no botão para atualizar ou cadastre uma nova partida.
+                  Cadastre os jogos manualmente com as datas, horários e suas tarefas personalizadas. Tudo fica salvo automaticamente para todos os aparelhos!
                 </p>
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    onClick={handleSyncGoogleMatches}
-                    className="px-4 py-2 bg-stone-800 text-[#e6b800] text-xs font-bold rounded-xl shadow transition-all inline-flex items-center gap-1.5"
-                  >
-                    <span>🔄 Atualizar Jogos Google</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingMatch(null);
-                      setIsMatchModalOpen(true);
-                    }}
-                    className="px-4 py-2 bg-[#722F37] hover:bg-[#5a0c1a] text-white text-xs font-bold rounded-xl shadow transition-all inline-flex items-center gap-1.5"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Cadastrar Novo Jogo</span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => {
+                    setEditingMatch(null);
+                    setIsMatchModalOpen(true);
+                  }}
+                  className="px-5 py-2.5 bg-[#722F37] hover:bg-[#5a0c1a] text-white text-xs font-bold rounded-xl shadow-lg transition-all inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Cadastrar Novo Jogo Manualmente</span>
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -532,7 +525,7 @@ export default function App() {
                     onDeleteTask={handleDeleteTask}
                     onNotifyMatch={(m) => {
                       handleSendTestNotification(undefined, m.id)
-                        .then(() => showToast(`Lembrete disparado no Telegram para Fluminense vs ${m.opponent}! 🇭🇺`))
+                        .then(() => showToast(`Lembrete disparado no Telegram para ${m.opponent}! 🇭🇺`))
                         .catch((err) => showToast(err.message, 'error'));
                     }}
                   />
@@ -565,7 +558,7 @@ export default function App() {
           setEditingMatch(null);
         }}
         onSave={handleSaveMatch}
- initialData={editingMatch}
+        initialData={editingMatch}
       />
 
       <TelegramSettingsModal
@@ -585,32 +578,6 @@ export default function App() {
         onSendCustomNotification={async (text, matchId) => {
           return await handleSendTestNotification(text, matchId);
         }}
-      />
-
-      <SyncModal
-        isOpen={isSyncModalOpen}
-        onClose={() => setIsSyncModalOpen(false)}
-        onApplySyncCode={async (code) => {
-          setIsSyncingCloud(true);
-          const cloudRes = await syncCloudData(code, matches);
-          if (cloudRes.success && cloudRes.remoteMatches) {
-            syncMatchesState(cloudRes.remoteMatches);
-            showToast(`Aparelho conectado com sucesso! Código: ${code}`, 'success');
-          } else {
-            showToast(`Iniciado novo canal de sincronização: ${code}`, 'info');
-          }
-          setIsSyncingCloud(false);
-        }}
-        onForceSync={async () => {
-          setIsSyncingCloud(true);
-          const cloudRes = await syncCloudData(getSyncCode(), matches);
-          if (cloudRes.success && cloudRes.remoteMatches) {
-            syncMatchesState(cloudRes.remoteMatches);
-            showToast('Dados sincronizados com a nuvem em todos os aparelhos!', 'success');
-          }
-          setIsSyncingCloud(false);
-        }}
-        isSyncing={isSyncingCloud}
       />
 
     </div>

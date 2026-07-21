@@ -1,12 +1,14 @@
 import { Match, TelegramSettings, NotificationLog } from '../types';
 import { INITIAL_MATCHES } from '../data/initialData';
 
-const LOCAL_STORAGE_MATCHES_KEY = 'fluremind_matches_v2';
-const LOCAL_STORAGE_TELEGRAM_KEY = 'fluremind_telegram_v2';
-const LOCAL_STORAGE_LOGS_KEY = 'fluremind_logs_v2';
-const LOCAL_STORAGE_SYNC_CODE_KEY = 'fluremind_sync_code_v2';
+const LOCAL_STORAGE_MATCHES_KEY = 'fluremind_matches_v4';
+const LOCAL_STORAGE_TELEGRAM_KEY = 'fluremind_telegram_v4';
+const LOCAL_STORAGE_LOGS_KEY = 'fluremind_logs_v4';
 
-// Safe JSON fetch wrapper that checks Content-Type to prevent "Unexpected token 'T'" errors on Vercel
+// Single shared global storage key so ALL devices opening the link see the EXACT same matches & pre-filled tasks automatically
+const GLOBAL_CLOUD_SYNC_KEY = 'FLU-MAIN-DATABASE-2026';
+
+// Safe JSON fetch wrapper that checks Content-Type
 export async function safeFetchJson<T>(url: string, options?: RequestInit): Promise<{ ok: boolean; data?: T; error?: string; status?: number }> {
   try {
     const res = await fetch(url, {
@@ -22,7 +24,7 @@ export async function safeFetchJson<T>(url: string, options?: RequestInit): Prom
       return {
         ok: false,
         status: res.status,
-        error: `O servidor retornou HTML (${res.status}) em vez de JSON. Verifique se o backend está rodando.`
+        error: `O servidor retornou HTML (${res.status}) em vez de JSON.`
       };
     }
 
@@ -52,23 +54,18 @@ export function getLocalMatches(): Match[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Enforce Mandante filter
-        return parsed.map(m => ({ ...m, isHome: true }));
+        return parsed;
       }
     }
   } catch (e) {
     console.warn('Erro ao ler localStorage:', e);
   }
-  // Fallback to initial home matches
-  saveLocalMatches(INITIAL_MATCHES);
   return INITIAL_MATCHES;
 }
 
 export function saveLocalMatches(matches: Match[]) {
   try {
-    // Only save Mandante matches
-    const homeMatches = matches.map(m => ({ ...m, isHome: true }));
-    localStorage.setItem(LOCAL_STORAGE_MATCHES_KEY, JSON.stringify(homeMatches));
+    localStorage.setItem(LOCAL_STORAGE_MATCHES_KEY, JSON.stringify(matches));
   } catch (e) {
     console.error('Erro ao salvar no localStorage:', e);
   }
@@ -103,32 +100,17 @@ export function saveLocalLogs(logs: NotificationLog[]) {
 }
 
 export function getSyncCode(): string {
-  try {
-    let code = localStorage.getItem(LOCAL_STORAGE_SYNC_CODE_KEY);
-    if (!code) {
-      code = 'FLU-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-      localStorage.setItem(LOCAL_STORAGE_SYNC_CODE_KEY, code);
-    }
-    return code;
-  } catch (e) {
-    return 'FLU-TRICOLOR';
-  }
+  return GLOBAL_CLOUD_SYNC_KEY;
 }
 
-export function setSyncCode(code: string) {
-  try {
-    localStorage.setItem(LOCAL_STORAGE_SYNC_CODE_KEY, code.toUpperCase().trim());
-  } catch (e) {}
+export function setSyncCode(_code: string) {
+  // Global sync is automatic now, no manual codes required
 }
 
-// Multi-Device Cloud Sync API using public bin API for instant cross-device sharing
-export async function syncCloudData(syncCode: string, matchesData: Match[]): Promise<{ success: boolean; remoteMatches?: Match[]; error?: string }> {
-  const cleanCode = syncCode.trim().toUpperCase() || 'FLU-TRICOLOR';
-  const apiUrl = `https://api.kvstore.io/collections/${cleanCode}`;
-
+// Multi-Device Cloud Sync API using global shared JSON storage
+export async function syncCloudData(_syncCode?: string, matchesData?: Match[]): Promise<{ success: boolean; remoteMatches?: Match[]; error?: string }> {
   try {
-    // Attempt cloud push/pull
-    const res = await fetch(`https://jsonblob.com/api/jsonBlob/${encodeURIComponent(cleanCode)}`, {
+    const res = await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_SYNC_KEY}`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' }
     });
@@ -143,14 +125,17 @@ export async function syncCloudData(syncCode: string, matchesData: Match[]): Pro
     console.log('Cloud sync status:', err);
   }
 
-  // Fallback to local storage mirror
+  // Push local state if cloud is not yet created
+  if (matchesData && matchesData.length > 0) {
+    pushCloudData(GLOBAL_CLOUD_SYNC_KEY, matchesData);
+  }
+
   return { success: true, remoteMatches: matchesData };
 }
 
-export async function pushCloudData(syncCode: string, matchesData: Match[]) {
-  const cleanCode = syncCode.trim().toUpperCase() || 'FLU-TRICOLOR';
+export async function pushCloudData(_syncCode: string, matchesData: Match[]) {
   try {
-    await fetch(`https://jsonblob.com/api/jsonBlob/${encodeURIComponent(cleanCode)}`, {
+    await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_SYNC_KEY}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(matchesData)

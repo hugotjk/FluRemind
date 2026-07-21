@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Send, Terminal, Settings, Shield, BellRing, Sparkles } from 'lucide-react';
+import { Calendar, Send, Terminal, Settings, Shield, BellRing, Sparkles, Plus, CloudCheck } from 'lucide-react';
 import { SystemStatus } from '../types';
 
 interface HeaderProps {
@@ -11,9 +11,6 @@ interface HeaderProps {
   onOpenAddMatch: () => void;
   onTriggerCronToday: () => void;
   isTriggeringCron: boolean;
-  onOpenSyncModal: () => void;
-  onSyncGoogleMatches: () => void;
-  isSyncingMatches: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,10 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTestNotification,
   onOpenAddMatch,
   onTriggerCronToday,
-  isTriggeringCron,
-  onOpenSyncModal,
-  onSyncGoogleMatches,
-  isSyncingMatches
+  isTriggeringCron
 }) => {
   return (
     <header className="bg-gradient-to-r from-[#5a0c1a] via-[#722F37] to-[#004d26] text-white border-b-4 border-[#e6b800] shadow-xl sticky top-0 z-30">
@@ -49,11 +43,11 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-1.5 font-serif">
-                  FluRemind <span className="text-[#e6b800] font-normal text-sm font-sans px-2 py-0.5 rounded-full bg-black/30 border border-[#e6b800]/40">FFC 1902</span>
+                  FluRemind <span className="text-[#e6b800] font-normal text-xs font-sans px-2 py-0.5 rounded-full bg-black/30 border border-[#e6b800]/40">FFC 1902</span>
                 </h1>
               </div>
               <p className="text-xs text-white/80 font-medium">
-                Calendário de Jogos do Fluminense & Lembretes no Telegram
+                Gerenciador de Jogos & Lembretes no Telegram
               </p>
             </div>
           </div>
@@ -99,10 +93,20 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Header Actions */}
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            
+            {/* Primary Add Match Button */}
+            <button
+              onClick={onOpenAddMatch}
+              className="flex items-center gap-1.5 text-xs font-black px-3.5 py-2 rounded-lg bg-[#e6b800] hover:bg-amber-400 text-[#5a0c1a] shadow-lg transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Cadastrar Jogo</span>
+            </button>
+
             {/* Telegram Status Pill */}
             <button
               onClick={onOpenTelegramSettings}
-              className={`flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
                 status?.telegramConfigured
                   ? 'bg-emerald-950/60 text-emerald-200 border-emerald-500/40 hover:bg-emerald-900/60'
                   : 'bg-amber-950/60 text-amber-200 border-amber-500/40 hover:bg-amber-900/60'
@@ -124,7 +128,7 @@ export const Header: React.FC<HeaderProps> = ({
               title="Testar Envio no Telegram"
             >
               <BellRing className="w-3.5 h-3.5" />
-              <span>Testar Envio</span>
+              <span className="hidden sm:inline">Testar Envio</span>
             </button>
 
             {/* Run Today's Cron Button */}
@@ -138,33 +142,15 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden md:inline">Verificar Hoje</span>
             </button>
 
-            {/* Multi-Device Sync Pill */}
-            <button
-              onClick={onOpenSyncModal}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white shadow transition-all active:scale-95"
-              title="Sincronizar tarefas em múltiplos aparelhos (Celular / PC)"
+            {/* Auto Cloud Sync Badge */}
+            <div
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-black/40 text-emerald-300 border border-emerald-500/30 shadow-inner"
+              title="Sincronização automática ativa em todos os dispositivos que acessarem o link"
             >
-              <span>📱 Multi-Aparelhos</span>
-            </button>
+              <CloudCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden lg:inline">Sincronizado na Nuvem</span>
+            </div>
 
-            {/* Google Sync Matches Button */}
-            <button
-              onClick={onSyncGoogleMatches}
-              disabled={isSyncingMatches}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-[#e6b800] border border-[#e6b800]/40 shadow transition-all active:scale-95 disabled:opacity-50"
-              title="Atualizar agenda de jogos do Fluminense Mandante via Google"
-            >
-              <span className={isSyncingMatches ? 'animate-spin inline-block' : ''}>🔄</span>
-              <span className="hidden lg:inline">Atualizar Jogos Google</span>
-            </button>
-
-            {/* Add Game Button */}
-            <button
-              onClick={onOpenAddMatch}
-              className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-[#e6b800] hover:bg-[#d4a800] text-[#5a0c1a] shadow transition-all active:scale-95 ml-auto sm:ml-0"
-            >
-              <span>+ Novo Jogo</span>
-            </button>
           </div>
 
         </div>

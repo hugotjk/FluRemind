@@ -44,9 +44,6 @@ function ensureDb(): DbSchema {
     const data = JSON.parse(content) as DbSchema;
     if (!data.matches || data.matches.length === 0) {
       data.matches = INITIAL_MATCHES;
-    } else {
-      // Force all matches to Mandante Fluminense
-      data.matches = data.matches.map(m => ({ ...m, isHome: true }));
     }
     if (!data.telegramSettings) {
       data.telegramSettings = {
