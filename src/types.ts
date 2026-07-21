@@ -26,10 +26,18 @@ export interface Match {
   tasks: Task[];
 }
 
+export interface AutoScheduleSettings {
+  enabled: boolean;
+  daysOfWeek: number[]; // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb
+  notificationTimes: string[]; // Ex: ["09:00", "12:00", "18:00"]
+  onlyOnMatchDays: boolean; // Notificar apenas se houver jogo no dia
+}
+
 export interface TelegramSettings {
   botToken: string;
   chatId: string;
   enabled: boolean;
+  autoSchedule?: AutoScheduleSettings;
   hasEnvToken?: boolean;
   hasEnvChatId?: boolean;
   cronSecret?: string;

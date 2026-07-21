@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Match, SystemStatus, TelegramSettings, NotificationLog } from './types';
+import { Match, SystemStatus, TelegramSettings, NotificationLog, AutoScheduleSettings } from './types';
 import { Header } from './components/Header';
 import { NextMatchHero } from './components/NextMatchHero';
 import { MatchCard } from './components/MatchCard';
@@ -48,8 +48,14 @@ export default function App() {
   // Toast Feedback State
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ type, message });
+  const showToast = (message: any, type: 'success' | 'error' | 'info' = 'success') => {
+    let msgStr = 'Ocorreu um erro';
+    if (typeof message === 'string') {
+      msgStr = message;
+    } else if (message && typeof message === 'object') {
+      msgStr = message.message || message.error || JSON.stringify(message);
+    }
+    setToast({ type, message: msgStr });
     setTimeout(() => setToast(null), 4000);
   };
 
@@ -253,25 +259,69 @@ export default function App() {
     });
   };
 
+  // Client-side auto-schedule checker (runs every 30s)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (!telegramSettings?.autoSchedule?.enabled) return;
+      const { daysOfWeek, notificationTimes, onlyOnMatchDays } = telegramSettings.autoSchedule;
+
+      const now = new Date();
+      const currentDay = now.getDay(); // 0=Dom, 1=Seg...
+      if (!daysOfWeek || !daysOfWeek.includes(currentDay)) return;
+
+      const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (!notificationTimes || !notificationTimes.includes(currentTimeStr)) return;
+
+      // Check if already triggered this minute to avoid duplicates
+      const triggerKey = `auto_sent_${now.toISOString().split('T')[0]}_${currentTimeStr}`;
+      if (sessionStorage.getItem(triggerKey)) return;
+      sessionStorage.setItem(triggerKey, 'true');
+
+      // Check match requirement if enabled
+      const todayStr = now.toISOString().split('T')[0];
+      const hasTodayMatch = matches.some(m => m.date === todayStr);
+
+      if (onlyOnMatchDays && !hasTodayMatch) return;
+
+      // Fire auto reminder
+      try {
+        await safeFetchJson('/api/cron/reminders');
+        showToast(`Lembrete automático enviado no Telegram (${currentTimeStr})! 🇭🇺`, 'info');
+      } catch (err) {
+        console.warn('Erro na verificação do envio automático:', err);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [telegramSettings, matches]);
+
   // Telegram Config & Dispatches
-  const handleSaveTelegramSettings = async (botToken: string, chatId: string) => {
-    const newSettings: TelegramSettings = { botToken, chatId, enabled: true };
+  const handleSaveTelegramSettings = async (botToken: string, chatId: string, autoSchedule?: AutoScheduleSettings) => {
+    const newSettings: TelegramSettings = {
+      botToken,
+      chatId,
+      enabled: true,
+      autoSchedule
+    };
     saveLocalTelegramSettings(newSettings);
     setTelegramSettings(newSettings);
 
     const res = await safeFetchJson('/api/telegram/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ botToken, chatId })
+      body: JSON.stringify({ botToken, chatId, enabled: true, autoSchedule })
     });
 
     if (res.ok) {
-      showToast('Configurações do Telegram salvas no servidor!');
+      showToast('Configurações e agendamento salvos com sucesso!');
     } else {
       showToast('Configurações salvas localmente!');
     }
 
-    setStatus({
+    setStatus(prev => prev ? {
+      ...prev,
+      telegramConfigured: Boolean(botToken && chatId)
+    } : {
       matchesCount: matches.length,
       todayMatchesCount: matches.filter(m => m.date === new Date().toISOString().split('T')[0]).length,
       telegramConfigured: Boolean(botToken && chatId),

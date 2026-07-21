@@ -86,22 +86,42 @@ function getTelegramCreds(db: DbSchema) {
   return { token, chatId };
 }
 
-// Helper to send Telegram message
+// Helper to send Telegram message safely with HTML formatting & plain text fallback
 async function sendTelegramNotification(token: string, chatId: string, text: string) {
   if (!token || !chatId) {
-    throw new Error('TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não configurados.');
+    throw new Error('TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não estão configurados. Por favor, acesse as configurações do Telegram.');
   }
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
+
+  // First try: Send with HTML parse mode
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: 'HTML'
+      })
+    });
+
+    const resData = await response.json();
+    if (response.ok && resData.ok) {
+      return resData;
+    }
+  } catch (e) {
+    console.warn('HTML parse failed, attempting plain text fallback:', e);
+  }
+
+  // Second try: Fallback plain text without markup tags
+  const plainText = text.replace(/<[^>]*>/g, '');
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
-      text: text,
-      parse_mode: 'Markdown'
+      text: plainText
     })
   });
 
@@ -114,40 +134,49 @@ async function sendTelegramNotification(token: string, chatId: string, text: str
   return resData;
 }
 
-// Helper to format match reminder message for Telegram
+// Helper to escape HTML characters in raw text
+function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Helper to format match reminder message for Telegram (HTML)
 function formatMatchTelegramMessage(match: Match): string {
   const homeAway = match.isHome ? '🏠 Casa (Maracanã/Rio)' : '✈️ Fora de Casa';
   const pendingTasks = match.tasks.filter(t => !t.completed);
   const doneTasks = match.tasks.filter(t => t.completed);
 
-  let msg = `🇭🇺 *HOJE TEM FLUMINENSE!* ⚽\n\n`;
-  msg += `🛡️ *Fluminense vs ${match.opponent}*\n`;
-  msg += `🏆 *Competição:* ${match.competition}\n`;
-  msg += `⏰ *Horário:* ${match.time}\n`;
-  msg += `📍 *Local:* ${match.location} (${homeAway})\n\n`;
+  let msg = `🇭🇺 <b>HOJE TEM FLUMINENSE!</b> ⚽\n\n`;
+  msg += `🛡️ <b>Fluminense vs ${escapeHtml(match.opponent)}</b>\n`;
+  msg += `🏆 <b>Competição:</b> ${escapeHtml(match.competition)}\n`;
+  msg += `⏰ <b>Horário:</b> ${escapeHtml(match.time)}\n`;
+  msg += `📍 <b>Local:</b> ${escapeHtml(match.location)} (${homeAway})\n\n`;
 
   if (match.notes) {
-    msg += `📝 *Observação:* ${match.notes}\n\n`;
+    msg += `📝 <b>Observação:</b> ${escapeHtml(match.notes)}\n\n`;
   }
 
-  msg += `📋 *CHECKLIST DE TAREFAS (${doneTasks.length}/${match.tasks.length} concluídas):*\n`;
+  msg += `📋 <b>CHECKLIST DE TAREFAS (${doneTasks.length}/${match.tasks.length} concluídas):</b>\n`;
 
   if (match.tasks.length === 0) {
-    msg += `_Nenhuma tarefa cadastrada para este jogo._\n`;
+    msg += `<i>Nenhuma tarefa cadastrada para este jogo.</i>\n`;
   } else {
     match.tasks.forEach(t => {
       const statusIcon = t.completed ? '✅' : '⏳';
-      msg += `${statusIcon} ${t.text}\n`;
+      msg += `${statusIcon} ${escapeHtml(t.text)}\n`;
     });
   }
 
   if (pendingTasks.length > 0) {
-    msg += `\n⚠️ *Atenção:* Você possui *${pendingTasks.length}* tarefa(s) pendente(s)!`;
+    msg += `\n⚠️ <b>Atenção:</b> Você possui <b>${pendingTasks.length}</b> tarefa(s) pendente(s)!`;
   } else if (match.tasks.length > 0) {
-    msg += `\n🎉 *Tudo pronto!* Todas as tarefas foram concluídas!`;
+    msg += `\n🎉 <b>Tudo pronto!</b> Todas as tarefas foram concluídas!`;
   }
 
-  msg += `\n\n🔥 *VAMOS, TRICOLOR! VENCER OU VENCER!* 🇭🇺`;
+  msg += `\n\n🔥 <b>VAMOS, TRICOLOR! VENCER OU VENCER!</b> 🇭🇺`;
 
   return msg;
 }
@@ -181,22 +210,29 @@ async function startServer() {
     res.json({
       botToken: db.telegramSettings.botToken ? `${db.telegramSettings.botToken.substring(0, 6)}...` : '',
       chatId: db.telegramSettings.chatId || '',
-      enabled: db.telegramSettings.enabled,
+      enabled: db.telegramSettings.enabled ?? true,
+      autoSchedule: db.telegramSettings.autoSchedule || {
+        enabled: true,
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+        notificationTimes: ['09:00', '12:00', '18:00'],
+        onlyOnMatchDays: false
+      },
       hasEnvToken: Boolean(process.env.TELEGRAM_BOT_TOKEN),
       hasEnvChatId: Boolean(process.env.TELEGRAM_CHAT_ID)
     });
   });
 
   app.post('/api/telegram/config', (req, res) => {
-    const { botToken, chatId, enabled } = req.body;
+    const { botToken, chatId, enabled, autoSchedule } = req.body;
     const db = ensureDb();
 
-    if (botToken !== undefined) db.telegramSettings.botToken = botToken;
+    if (botToken !== undefined && !botToken.includes('...')) db.telegramSettings.botToken = botToken;
     if (chatId !== undefined) db.telegramSettings.chatId = chatId;
     if (enabled !== undefined) db.telegramSettings.enabled = Boolean(enabled);
+    if (autoSchedule !== undefined) db.telegramSettings.autoSchedule = autoSchedule;
 
     saveDb(db);
-    res.json({ success: true, message: 'Configurações salvas com sucesso!' });
+    res.json({ success: true, message: 'Configurações do Telegram salvas com sucesso!' });
   });
 
   // 3. Test Telegram Message
