@@ -1,14 +1,14 @@
 import { Match, TelegramSettings, NotificationLog } from '../types';
 import { INITIAL_MATCHES } from '../data/initialData';
 
-const LOCAL_STORAGE_MATCHES_KEY = 'fluremind_matches_v4';
-const LOCAL_STORAGE_TELEGRAM_KEY = 'fluremind_telegram_v4';
-const LOCAL_STORAGE_LOGS_KEY = 'fluremind_logs_v4';
+const LOCAL_STORAGE_MATCHES_KEY = 'fluremind_matches_v5';
+const LOCAL_STORAGE_TELEGRAM_KEY = 'fluremind_telegram_v5';
+const LOCAL_STORAGE_LOGS_KEY = 'fluremind_logs_v5';
 
-// Single shared global storage key so ALL devices opening the link see the EXACT same matches & pre-filled tasks automatically
-const GLOBAL_CLOUD_SYNC_KEY = 'FLU-MAIN-DATABASE-2026';
+// Unique persistent key for instant cross-device synchronization without codes
+const GLOBAL_CLOUD_SYNC_KEY = 'FLU-TRICOLOR-MATCHES-2026-PERSISTENT';
 
-// Safe JSON fetch wrapper that checks Content-Type
+// Safe JSON fetch wrapper
 export async function safeFetchJson<T>(url: string, options?: RequestInit): Promise<{ ok: boolean; data?: T; error?: string; status?: number }> {
   try {
     const res = await fetch(url, {
@@ -53,7 +53,7 @@ export function getLocalMatches(): Match[] {
     const raw = localStorage.getItem(LOCAL_STORAGE_MATCHES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -103,9 +103,7 @@ export function getSyncCode(): string {
   return GLOBAL_CLOUD_SYNC_KEY;
 }
 
-export function setSyncCode(_code: string) {
-  // Global sync is automatic now, no manual codes required
-}
+export function setSyncCode(_code: string) {}
 
 // Multi-Device Cloud Sync API using global shared JSON storage
 export async function syncCloudData(_syncCode?: string, matchesData?: Match[]): Promise<{ success: boolean; remoteMatches?: Match[]; error?: string }> {
@@ -117,7 +115,7 @@ export async function syncCloudData(_syncCode?: string, matchesData?: Match[]): 
 
     if (res.ok) {
       const remoteMatches = await res.json();
-      if (Array.isArray(remoteMatches) && remoteMatches.length > 0) {
+      if (Array.isArray(remoteMatches)) {
         return { success: true, remoteMatches };
       }
     }
@@ -126,7 +124,7 @@ export async function syncCloudData(_syncCode?: string, matchesData?: Match[]): 
   }
 
   // Push local state if cloud is not yet created
-  if (matchesData && matchesData.length > 0) {
+  if (matchesData) {
     pushCloudData(GLOBAL_CLOUD_SYNC_KEY, matchesData);
   }
 

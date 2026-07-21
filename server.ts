@@ -42,8 +42,8 @@ function ensureDb(): DbSchema {
   try {
     const content = fs.readFileSync(DB_FILE, 'utf-8');
     const data = JSON.parse(content) as DbSchema;
-    if (!data.matches || data.matches.length === 0) {
-      data.matches = INITIAL_MATCHES;
+    if (!data.matches) {
+      data.matches = [];
     }
     if (!data.telegramSettings) {
       data.telegramSettings = {
