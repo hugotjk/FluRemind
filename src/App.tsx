@@ -333,29 +333,31 @@ export default function App() {
   
   const nextMatch = upcomingMatches[0] || matches[0] || null;
 
-  // Filter matches for list
-  const filteredMatches = matches.filter(m => {
-    // Venue filter
-    if (selectedVenue === 'Casa' && !m.isHome) return false;
-    if (selectedVenue === 'Fora' && m.isHome) return false;
+  // Filter and sort matches by date
+  const filteredMatches = matches
+    .filter(m => {
+      // Venue filter
+      if (selectedVenue === 'Casa' && !m.isHome) return false;
+      if (selectedVenue === 'Fora' && m.isHome) return false;
 
-    // Competition filter
-    if (selectedComp !== 'Todos' && m.competition !== selectedComp) return false;
+      // Competition filter
+      if (selectedComp !== 'Todos' && m.competition !== selectedComp) return false;
 
-    // Period filter
-    if (selectedPeriod === 'Hoje' && m.date !== todayStr) return false;
-    if (selectedPeriod === 'Próximos' && m.date < todayStr) return false;
-    if (selectedPeriod === 'Passados' && m.date >= todayStr) return false;
+      // Period filter
+      if (selectedPeriod === 'Hoje' && m.date !== todayStr) return false;
+      if (selectedPeriod === 'Próximos' && m.date < todayStr) return false;
+      if (selectedPeriod === 'Passados' && m.date >= todayStr) return false;
 
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchText = `${m.opponent} ${m.competition} ${m.location} ${m.notes || ''}`.toLowerCase();
-      if (!matchText.includes(q)) return false;
-    }
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchText = `${m.opponent} ${m.competition} ${m.location} ${m.notes || ''}`.toLowerCase();
+        if (!matchText.includes(q)) return false;
+      }
 
-    return true;
-  });
+      return true;
+    })
+    .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900 font-sans pb-16">
