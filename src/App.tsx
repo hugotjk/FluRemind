@@ -84,6 +84,10 @@ export default function App() {
         currentMatches = getLocalMatches();
       }
 
+      if (!currentMatches || currentMatches.length === 0) {
+        currentMatches = INITIAL_MATCHES;
+      }
+
       // Check global cloud database so any device or incognito tab sees the same matches & tasks
       const cloudRes = await syncCloudData();
       if (cloudRes.success) {
@@ -485,7 +489,7 @@ export default function App() {
 
       // Period filter
       if (selectedPeriod === 'Hoje' && m.date !== todayStr) return false;
-      if (selectedPeriod === 'Próximos' && (!m.date || m.date < todayStr)) return false;
+      if (selectedPeriod === 'Próximos' && m.date && m.date < todayStr) return false;
       if (selectedPeriod === 'Passados' && (!m.date || m.date >= todayStr)) return false;
 
       // Search query

@@ -27,8 +27,11 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
   onSaveSettings,
   onTestConnection
 }) => {
-  const [botToken, setBotToken] = useState('');
-  const [chatId, setChatId] = useState('');
+  const DEFAULT_BOT_TOKEN = '8951861356:AAHo0fczfX2TORYkuNQT8VMcN5aRdSuhLsc';
+  const DEFAULT_CHAT_ID = '640896648';
+
+  const [botToken, setBotToken] = useState(DEFAULT_BOT_TOKEN);
+  const [chatId, setChatId] = useState(DEFAULT_CHAT_ID);
   
   // Auto Schedule State
   const [autoEnabled, setAutoEnabled] = useState(true);
@@ -43,14 +46,17 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
 
   useEffect(() => {
     if (settings) {
-      setBotToken(settings.botToken || '');
-      setChatId(settings.chatId || '');
+      setBotToken(settings.botToken || DEFAULT_BOT_TOKEN);
+      setChatId(settings.chatId || DEFAULT_CHAT_ID);
       if (settings.autoSchedule) {
         setAutoEnabled(settings.autoSchedule.enabled ?? true);
         setSelectedDays(settings.autoSchedule.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]);
         setTimes(settings.autoSchedule.notificationTimes || ['09:00', '12:00', '18:00']);
         setOnlyMatchDays(settings.autoSchedule.onlyOnMatchDays ?? false);
       }
+    } else {
+      setBotToken(DEFAULT_BOT_TOKEN);
+      setChatId(DEFAULT_CHAT_ID);
     }
   }, [settings, isOpen]);
 

@@ -20,6 +20,9 @@ interface DbSchema {
   logs: NotificationLog[];
 }
 
+const DEFAULT_BOT_TOKEN = '8951861356:AAHo0fczfX2TORYkuNQT8VMcN5aRdSuhLsc';
+const DEFAULT_CHAT_ID = '640896648';
+
 function ensureDb(): DbSchema {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -29,8 +32,8 @@ function ensureDb(): DbSchema {
     const initialDb: DbSchema = {
       matches: INITIAL_MATCHES,
       telegramSettings: {
-        botToken: process.env.TELEGRAM_BOT_TOKEN || '',
-        chatId: process.env.TELEGRAM_CHAT_ID || '',
+        botToken: process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN,
+        chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
         enabled: true
       },
       logs: []
@@ -42,15 +45,16 @@ function ensureDb(): DbSchema {
   try {
     const content = fs.readFileSync(DB_FILE, 'utf-8');
     const data = JSON.parse(content) as DbSchema;
-    if (!data.matches) {
-      data.matches = [];
+    if (!data.matches || data.matches.length === 0) {
+      data.matches = INITIAL_MATCHES;
     }
-    if (!data.telegramSettings) {
+    if (!data.telegramSettings || !data.telegramSettings.botToken) {
       data.telegramSettings = {
-        botToken: process.env.TELEGRAM_BOT_TOKEN || '',
-        chatId: process.env.TELEGRAM_CHAT_ID || '',
+        botToken: process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN,
+        chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
         enabled: true
       };
+      saveDb(data);
     }
     if (!data.logs) data.logs = [];
     return data;
@@ -59,8 +63,8 @@ function ensureDb(): DbSchema {
     return {
       matches: INITIAL_MATCHES,
       telegramSettings: {
-        botToken: process.env.TELEGRAM_BOT_TOKEN || '',
-        chatId: process.env.TELEGRAM_CHAT_ID || '',
+        botToken: process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN,
+        chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
         enabled: true
       },
       logs: []
@@ -81,8 +85,8 @@ function saveDb(data: DbSchema) {
 
 // Get effective Telegram credentials (env var priority, fallback to db settings)
 function getTelegramCreds(db: DbSchema) {
-  const token = process.env.TELEGRAM_BOT_TOKEN || db.telegramSettings.botToken || '';
-  const chatId = process.env.TELEGRAM_CHAT_ID || db.telegramSettings.chatId || '';
+  const token = process.env.TELEGRAM_BOT_TOKEN || db.telegramSettings?.botToken || DEFAULT_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID || db.telegramSettings?.chatId || DEFAULT_CHAT_ID;
   return { token, chatId };
 }
 

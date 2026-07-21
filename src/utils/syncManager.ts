@@ -77,12 +77,22 @@ export function saveLocalMatches(matches: Match[]) {
   }
 }
 
+export const DEFAULT_TELEGRAM_BOT_TOKEN = '8951861356:AAHo0fczfX2TORYkuNQT8VMcN5aRdSuhLsc';
+export const DEFAULT_TELEGRAM_CHAT_ID = '640896648';
+
 export function getLocalTelegramSettings(): TelegramSettings {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_TELEGRAM_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...parsed,
+        botToken: parsed.botToken || DEFAULT_TELEGRAM_BOT_TOKEN,
+        chatId: parsed.chatId || DEFAULT_TELEGRAM_CHAT_ID
+      };
+    }
   } catch (e) {}
-  return { botToken: '', chatId: '', enabled: true };
+  return { botToken: DEFAULT_TELEGRAM_BOT_TOKEN, chatId: DEFAULT_TELEGRAM_CHAT_ID, enabled: true };
 }
 
 export function saveLocalTelegramSettings(settings: TelegramSettings) {
