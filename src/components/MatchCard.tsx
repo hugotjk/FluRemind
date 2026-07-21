@@ -89,23 +89,23 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 {/* Team Matchup - Mandante Primeiro, Visitante Segundo com Escudos */}
                 <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-stone-900 leading-tight">
                   {/* Mandante (Escudo ANTES do nome) */}
-                  <div className="inline-flex items-center gap-1.5">
+                  <div className="inline-flex items-center gap-1.5 max-w-full">
                     <img
                       src={homeLogo}
                       alt={homeTeam}
                       className="w-5 h-5 sm:w-6 sm:h-6 object-contain shrink-0"
                       onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                     />
-                    <span className={`text-base sm:text-lg font-black font-serif ${homeIsFlu ? 'text-stone-900 tracking-tight' : 'text-stone-800'}`}>
+                    <span className={`text-base sm:text-lg font-black font-serif line-clamp-2 max-w-[170px] sm:max-w-[210px] leading-tight ${homeIsFlu ? 'text-stone-900 tracking-tight' : 'text-stone-800'}`}>
                       {homeTeam}
                     </span>
                   </div>
 
-                  <span className="text-xs sm:text-sm font-bold text-[#722F37] px-0.5">VS</span>
+                  <span className="text-xs sm:text-sm font-bold text-[#722F37] px-0.5 shrink-0">VS</span>
 
                   {/* Visitante (Escudo APÓS o nome) */}
-                  <div className="inline-flex items-center gap-1.5">
-                    <span className={`text-base sm:text-lg font-black font-serif ${awayIsFlu ? 'text-stone-900 tracking-tight' : 'text-stone-800'}`}>
+                  <div className="inline-flex items-center gap-1.5 max-w-full">
+                    <span className={`text-base sm:text-lg font-black font-serif line-clamp-2 max-w-[170px] sm:max-w-[210px] leading-tight ${awayIsFlu ? 'text-stone-900 tracking-tight' : 'text-stone-800'}`}>
                       {awayTeam}
                     </span>
                     <img

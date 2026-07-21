@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Send, Terminal, Settings, Shield, BellRing, Sparkles, Plus, CloudCheck } from 'lucide-react';
+import { Calendar, Send, Terminal, Settings, Shield, BellRing, Sparkles, Plus, CloudCheck, RefreshCw } from 'lucide-react';
 import { SystemStatus } from '../types';
 
 interface HeaderProps {
@@ -11,6 +11,8 @@ interface HeaderProps {
   onOpenAddMatch: () => void;
   onTriggerCronToday: () => void;
   isTriggeringCron: boolean;
+  onSyncFixtures: () => void;
+  isSyncingFixtures: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,7 +23,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTestNotification,
   onOpenAddMatch,
   onTriggerCronToday,
-  isTriggeringCron
+  isTriggeringCron,
+  onSyncFixtures,
+  isSyncingFixtures
 }) => {
   return (
     <header className="bg-gradient-to-r from-[#5a0c1a] via-[#722F37] to-[#004d26] text-white border-b-4 border-[#e6b800] shadow-xl sticky top-0 z-30">
@@ -140,6 +144,17 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Shield className={`w-3.5 h-3.5 ${isTriggeringCron ? 'animate-spin' : ''}`} />
               <span className="hidden md:inline">Verificar Hoje</span>
+            </button>
+
+            {/* Sync Fixtures Button (Sofascore & APIs) */}
+            <button
+              onClick={onSyncFixtures}
+              disabled={isSyncingFixtures}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white shadow transition-all active:scale-95"
+              title="Buscar atualização dos jogos do Fluminense no Sofascore e APIs"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFixtures ? 'animate-spin' : ''}`} />
+              <span>{isSyncingFixtures ? 'Sincronizando...' : 'Sincronizar Jogos'}</span>
             </button>
 
             {/* Auto Cloud Sync Badge */}

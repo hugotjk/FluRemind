@@ -118,8 +118,8 @@ export const TestNotificationModal: React.FC<TestNotificationModalProps> = ({
                 className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-sky-500 font-semibold"
               >
                 <option value="">-- Próximo Jogo / Padrão Geral --</option>
-                {(matches || []).map(m => (
-                  <option key={m.id} value={m.id}>
+                {(matches || []).map((m, idx) => (
+                  <option key={`${m.id}-${idx}`} value={m.id}>
                     Fluminense vs {m.opponent} ({m.date ? m.date.split('-').reverse().join('/') : ''} às {m.time || '16:00'}) - {m.competition}
                   </option>
                 ))}

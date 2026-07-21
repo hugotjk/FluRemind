@@ -18,7 +18,8 @@ import {
   getLocalLogs,
   saveLocalLogs,
   syncCloudData,
-  pushCloudData
+  pushCloudData,
+  syncFixturesFromAPI
 } from './utils/syncManager';
 import { INITIAL_MATCHES } from './data/initialData';
 import { mergeMatchesPreservingTasks } from './utils/teamLogos';
@@ -33,6 +34,29 @@ export default function App() {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isTriggeringCron, setIsTriggeringCron] = useState<boolean>(false);
+  const [isSyncingFixtures, setIsSyncingFixtures] = useState<boolean>(false);
+
+  const handleSyncFixtures = async () => {
+    setIsSyncingFixtures(true);
+    try {
+      const res = await syncFixturesFromAPI();
+      if (res.success && res.matches) {
+        setMatches(prevMatches => {
+          const merged = mergeMatchesPreservingTasks(prevMatches, res.matches!);
+          saveLocalMatches(merged);
+          pushCloudData(merged, telegramSettings || getLocalTelegramSettings());
+          return merged;
+        });
+        showToast(res.message || 'Jogos do Fluminense sincronizados com sucesso!', 'success');
+      } else {
+        showToast(res.error || 'Falha ao sincronizar jogos', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao sincronizar jogos', 'error');
+    } finally {
+      setIsSyncingFixtures(false);
+    }
+  };
 
   // Filters State
   const [selectedComp, setSelectedComp] = useState<string>('Todos');
@@ -519,6 +543,8 @@ export default function App() {
         }}
         onTriggerCronToday={handleTriggerTodayCron}
         isTriggeringCron={isTriggeringCron}
+        onSyncFixtures={handleSyncFixtures}
+        isSyncingFixtures={isSyncingFixtures}
       />
 
       {/* Global Toast Feedback */}
@@ -657,9 +683,9 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredMatches.map(match => (
+                {filteredMatches.map((match, idx) => (
                   <MatchCard
-                    key={match.id}
+                    key={`${match.id}-${idx}`}
                     match={match}
                     onEdit={(m) => {
                       setEditingMatch(m);

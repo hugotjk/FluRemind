@@ -1,0 +1,432 @@
+{
+  "matches": [
+    {
+      "id": "espn-401840813",
+      "opponent": "Grêmio",
+      "date": "2026-01-28",
+      "time": "19:30",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Grêmio at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "match-1784661837313",
+      "opponent": "Bahia",
+      "date": "2026-02-05",
+      "time": "19:00",
+      "competition": "Brasileirão",
+      "location": "Arena Fonte Nova",
+      "isHome": false,
+      "notes": "Fluminense at Bahia",
+      "tasks": [
+        {
+          "id": "task-1784662032199",
+          "text": "Levar meias Rikam",
+          "completed": false,
+          "priority": "normal"
+        },
+        {
+          "id": "task-1784662039547",
+          "text": "Levar bones Flexcap",
+          "completed": false,
+          "priority": "normal"
+        },
+        {
+          "id": "task-1784662044161",
+          "text": "Levar bandeiras BC Sartori",
+          "completed": false,
+          "priority": "normal"
+        }
+      ]
+    },
+    {
+      "id": "flu-bota-brasileirao",
+      "opponent": "Botafogo",
+      "date": "2026-02-12",
+      "time": "19:30",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Botafogo at Fluminense",
+      "tasks": [
+        {
+          "id": "t15",
+          "text": "Comprar ingresso setor visitante",
+          "completed": false,
+          "priority": "high"
+        },
+        {
+          "id": "t16",
+          "text": "Separar manto tricolor",
+          "completed": false,
+          "priority": "normal"
+        }
+      ]
+    },
+    {
+      "id": "espn-401841004",
+      "opponent": "Palmeiras",
+      "date": "2026-02-26",
+      "time": "21:30",
+      "competition": "Brasileirão",
+      "location": "Arena Barueri",
+      "isHome": false,
+      "notes": "Fluminense at Palmeiras",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841009",
+      "opponent": "Remo",
+      "date": "2026-03-12",
+      "time": "19:00",
+      "competition": "Brasileirão",
+      "location": "Mangueirão",
+      "isHome": false,
+      "notes": "Fluminense at Remo",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841022",
+      "opponent": "Athletico Paranaense",
+      "date": "2026-03-15",
+      "time": "16:00",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Athletico Paranaense at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841030",
+      "opponent": "Vasco da Gama",
+      "date": "2026-03-19",
+      "time": "21:30",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": false,
+      "notes": "Fluminense at Vasco da Gama",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841044",
+      "opponent": "Atlético-mg",
+      "date": "2026-03-21",
+      "time": "18:30",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Atlético-MG at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841054",
+      "opponent": "Corinthians",
+      "date": "2026-04-02",
+      "time": "21:30",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Corinthians at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841063",
+      "opponent": "Coritiba",
+      "date": "2026-04-04",
+      "time": "20:30",
+      "competition": "Brasileirão",
+      "location": "Couto Pereira",
+      "isHome": false,
+      "notes": "Fluminense at Coritiba",
+      "tasks": []
+    },
+    {
+      "id": "flu-fla-today",
+      "opponent": "Flamengo",
+      "date": "2026-04-12",
+      "time": "18:00",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Flamengo at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841082",
+      "opponent": "Santos",
+      "date": "2026-04-19",
+      "time": "16:00",
+      "competition": "Brasileirão",
+      "location": "Estádio Vila Belmiro (Urbano Caldeira)",
+      "isHome": false,
+      "notes": "Fluminense at Santos",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841090",
+      "opponent": "Chapecoense",
+      "date": "2026-04-26",
+      "time": "20:30",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Chapecoense at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841104",
+      "opponent": "Internacional",
+      "date": "2026-05-03",
+      "time": "18:30",
+      "competition": "Brasileirão",
+      "location": "Estadio Beira-Rio",
+      "isHome": false,
+      "notes": "Fluminense at Internacional",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841113",
+      "opponent": "Vitória",
+      "date": "2026-05-09",
+      "time": "18:00",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Vitória at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841127",
+      "opponent": "São Paulo",
+      "date": "2026-05-16",
+      "time": "19:00",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "São Paulo at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841134",
+      "opponent": "Mirassol",
+      "date": "2026-05-23",
+      "time": "19:00",
+      "competition": "Brasileirão",
+      "location": "Estadio Municipal José Maria de Campos Maia",
+      "isHome": false,
+      "notes": "Fluminense at Mirassol",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841145",
+      "opponent": "Cruzeiro",
+      "date": "2026-05-31",
+      "time": "20:30",
+      "competition": "Brasileirão",
+      "location": "Estadio Mineirão",
+      "isHome": false,
+      "notes": "Fluminense at Cruzeiro",
+      "tasks": []
+    },
+    {
+      "id": "espn-401841153",
+      "opponent": "Red Bull Bragantino",
+      "date": "2026-07-17",
+      "time": "20:00",
+      "competition": "Brasileirão",
+      "location": "Estadio do Maracana",
+      "isHome": true,
+      "notes": "Red Bull Bragantino at Fluminense",
+      "tasks": []
+    },
+    {
+      "id": "flu-river-libertadores",
+      "opponent": "River Plate",
+      "date": "2026-07-24",
+      "time": "21:30",
+      "competition": "Copa Libertadores",
+      "location": "Maracanã, Rio de Janeiro",
+      "isHome": true,
+      "notes": "Rodada crucial da Fase de Grupos da Libertadores! Maraca tricolor lotado.",
+      "tasks": [
+        {
+          "id": "t6",
+          "text": "Garantir ingresso no setor Sul",
+          "completed": true,
+          "priority": "high"
+        },
+        {
+          "id": "t7",
+          "text": "Vestir a armadura tricolor oficial",
+          "completed": false,
+          "priority": "normal"
+        },
+        {
+          "id": "t8",
+          "text": "Organizar pó de arroz para a recepção do ônibus do Flu",
+          "completed": false,
+          "priority": "high"
+        },
+        {
+          "id": "t9",
+          "text": "Conferir transmissão na TV / Paramount+",
+          "completed": false,
+          "priority": "normal"
+        }
+      ]
+    },
+    {
+      "id": "sofa-gremio",
+      "opponent": "Grêmio",
+      "date": "2026-07-26",
+      "time": "18:30",
+      "competition": "Brasileirão",
+      "location": "Arena do Grêmio, Porto Alegre",
+      "isHome": false,
+      "notes": "Rodada 17",
+      "tasks": []
+    },
+    {
+      "id": "match-1784661837313",
+      "opponent": "Bahia",
+      "date": "2026-07-29",
+      "time": "21:30",
+      "competition": "Brasileirão",
+      "location": "Maracanã, Rio de Janeiro",
+      "isHome": true,
+      "notes": "Rodada 18",
+      "tasks": [
+        {
+          "id": "task-1784662032199",
+          "text": "Levar meias Rikam",
+          "completed": false,
+          "priority": "normal"
+        },
+        {
+          "id": "task-1784662039547",
+          "text": "Levar bones Flexcap",
+          "completed": false,
+          "priority": "normal"
+        },
+        {
+          "id": "task-1784662044161",
+          "text": "Levar bandeiras BC Sartori",
+          "completed": false,
+          "priority": "normal"
+        }
+      ]
+    },
+    {
+      "id": "sofa-vasco-1",
+      "opponent": "Vasco da Gama",
+      "date": "2026-08-01",
+      "time": "17:30",
+      "competition": "Copa do Brasil",
+      "location": "São Januário, Rio de Janeiro",
+      "isHome": false,
+      "notes": "Oitavas - Ida",
+      "tasks": []
+    },
+    {
+      "id": "sofa-vasco-2",
+      "opponent": "Vasco da Gama",
+      "date": "2026-08-05",
+      "time": "21:30",
+      "competition": "Copa do Brasil",
+      "location": "Maracanã, Rio de Janeiro",
+      "isHome": true,
+      "notes": "Oitavas - Volta",
+      "tasks": []
+    },
+    {
+      "id": "flu-bota-brasileirao",
+      "opponent": "Botafogo",
+      "date": "2026-08-08",
+      "time": "21:00",
+      "competition": "Brasileirão",
+      "location": "Estádio Nilton Santos (Engenhão)",
+      "isHome": false,
+      "notes": "Clássico Vovô",
+      "tasks": [
+        {
+          "id": "t15",
+          "text": "Comprar ingresso setor visitante",
+          "completed": false,
+          "priority": "high"
+        },
+        {
+          "id": "t16",
+          "text": "Separar manto tricolor",
+          "completed": false,
+          "priority": "normal"
+        }
+      ]
+    },
+    {
+      "id": "sofa-independiente",
+      "opponent": "Independiente Riv.",
+      "date": "2026-08-11",
+      "time": "19:00",
+      "competition": "Copa Libertadores",
+      "location": "Maracanã, Rio de Janeiro",
+      "isHome": true,
+      "notes": "Libertadores",
+      "tasks": []
+    },
+    {
+      "id": "flu-fla-today",
+      "opponent": "Flamengo",
+      "date": "2026-08-16",
+      "time": "16:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã, Rio de Janeiro",
+      "isHome": true,
+      "notes": "Fla-Flu",
+      "tasks": []
+    },
+    {
+      "id": "sofa-ldu",
+      "opponent": "LDU Quito",
+      "date": "2026-08-20",
+      "time": "21:30",
+      "competition": "Copa Libertadores",
+      "location": "Estadio Rodrigo Paz Delgado",
+      "isHome": false,
+      "notes": "Libertadores",
+      "tasks": []
+    }
+  ],
+  "telegramSettings": {
+    "botToken": "8951861356:AAHo0fczfX2TORYkuNQT8VMcN5aRdSuhLsc",
+    "chatId": "640896648",
+    "enabled": true
+  },
+  "logs": [
+    {
+      "id": "log-1784665455457",
+      "timestamp": "2026-07-21T20:24:15.457Z",
+      "message": "🇭🇺 *HOJE TEM FLUMINENSE!* ⚽\n\n🛡️ *Fluminense vs Flamengo*\n🏆 *Competição:* Brasileirão\n⏰ *Horário:* 16:00\n📍 *Local:* Maracanã, Rio de Janeiro (🏠 Casa (Maracanã/Rio))\n\n📝 *Observação:* Clássico Fla-Flu decisivo na luta pelo topo da tabela! Ingressos esgotados.\n\n📋 *CHECKLIST DE TAREFAS (0/0 concluídas):*\n_Nenhuma tarefa cadastrada para este jogo._\n\n\n🔥 *VAMOS, TRICOLOR! VENCER OU VENCER!* 🇭🇺",
+      "type": "test",
+      "success": true,
+      "matchId": "flu-fla-today"
+    },
+    {
+      "id": "log-1784664963605",
+      "timestamp": "2026-07-21T20:16:03.605Z",
+      "message": "🇭🇺 *TESTE DE INTEGRAÇÃO - FLUREMIND* 🇭🇺\n\nOlá! Seu Bot do Telegram foi configurado com sucesso para enviar lembretes dos jogos do *Fluminense FC*! ⚽\n\n📅 *Status do Sistema:* Ativo e pronto para os jogos!\n⏰ *Vercel Cron:* Configurado para monitorar diariamente.\n\n🔥 *Saudações Tricolores!* 🛡️",
+      "type": "test",
+      "success": true
+    },
+    {
+      "id": "log-1784664952681-flu-fla-today",
+      "timestamp": "2026-07-21T20:15:52.681Z",
+      "message": "🇭🇺 *HOJE TEM FLUMINENSE!* ⚽\n\n🛡️ *Fluminense vs Flamengo*\n🏆 *Competição:* Brasileirão\n⏰ *Horário:* 16:00\n📍 *Local:* Maracanã, Rio de Janeiro (🏠 Casa (Maracanã/Rio))\n\n📝 *Observação:* Clássico Fla-Flu decisivo na luta pelo topo da tabela! Ingressos esgotados.\n\n📋 *CHECKLIST DE TAREFAS (0/0 concluídas):*\n_Nenhuma tarefa cadastrada para este jogo._\n\n\n🔥 *VAMOS, TRICOLOR! VENCER OU VENCER!* 🇭🇺",
+      "type": "cron",
+      "success": true,
+      "matchId": "flu-fla-today",
+      "opponent": "Flamengo"
+    }
+  ]
+}

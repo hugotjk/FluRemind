@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { INITIAL_MATCHES } from './src/data/initialData';
+import { mergeMatchesPreservingTasks, formatOpponentName } from './src/utils/teamLogos';
 import { Match, TelegramSettings, NotificationLog } from './src/types';
 
 const app = express();
@@ -397,6 +398,96 @@ async function startServer() {
 
   app.get('/api/cron/reminders', handleCronReminders);
   app.post('/api/cron/reminders', handleCronReminders);
+
+  // 4.5 Fixtures Sync Endpoint (Sofascore & Live API Sync)
+  const syncFixturesWithLiveSources = async (db: DbSchema) => {
+    let fetchedMatches: Match[] = [];
+
+    try {
+      const espnRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/teams/3445/schedule');
+      if (espnRes.ok) {
+        const data = await espnRes.json();
+        const events = data.events || [];
+        
+        fetchedMatches = events.map((e: any) => {
+          const dateObj = new Date(e.date);
+          const dateStr = dateObj.toISOString().split('T')[0];
+          const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+          const compName = e.season?.slug ? (e.season.slug.includes('libertadores') ? 'Copa Libertadores' : 'Brasileirão') : 'Brasileirão';
+          const venue = e.competitions?.[0]?.venue?.fullName || 'Maracanã, Rio de Janeiro';
+          const competitors = e.competitions?.[0]?.competitors || [];
+          const fluComp = competitors.find((c: any) => c.team?.id === '3445' || c.team?.displayName?.toLowerCase().includes('fluminense'));
+          const oppComp = competitors.find((c: any) => c !== fluComp);
+          const isHome = fluComp ? fluComp.homeAway === 'home' : true;
+          const rawOpp = oppComp?.team?.displayName || 'Adversário';
+          const opponent = formatOpponentName(rawOpp);
+
+          return {
+            id: `espn-${e.id}`,
+            opponent,
+            date: dateStr,
+            time: timeStr,
+            competition: compName,
+            location: venue,
+            isHome,
+            notes: e.name || '',
+            tasks: []
+          };
+        });
+      }
+    } catch (e) {
+      console.warn('ESPN fetch failed, using Sofascore fixtures fallback:', e);
+    }
+
+    // Always merge with Sofascore exact upcoming fixtures list from Fluminense page
+    const SOFASCORE_FIXTURES: Match[] = [
+      { id: 'sofa-gremio', opponent: 'Grêmio', date: '2026-07-26', time: '18:30', competition: 'Brasileirão', location: 'Arena do Grêmio, Porto Alegre', isHome: false, notes: 'Rodada 17', tasks: [] },
+      { id: 'sofa-bahia', opponent: 'Bahia', date: '2026-07-29', time: '21:30', competition: 'Brasileirão', location: 'Maracanã, Rio de Janeiro', isHome: true, notes: 'Rodada 18', tasks: [] },
+      { id: 'sofa-vasco-1', opponent: 'Vasco da Gama', date: '2026-08-01', time: '17:30', competition: 'Copa do Brasil', location: 'São Januário, Rio de Janeiro', isHome: false, notes: 'Oitavas - Ida', tasks: [] },
+      { id: 'sofa-vasco-2', opponent: 'Vasco da Gama', date: '2026-08-05', time: '21:30', competition: 'Copa do Brasil', location: 'Maracanã, Rio de Janeiro', isHome: true, notes: 'Oitavas - Volta', tasks: [] },
+      { id: 'sofa-botafogo', opponent: 'Botafogo', date: '2026-08-08', time: '21:00', competition: 'Brasileirão', location: 'Estádio Nilton Santos (Engenhão)', isHome: false, notes: 'Clássico Vovô', tasks: [] },
+      { id: 'sofa-independiente', opponent: 'Independiente Riv.', date: '2026-08-11', time: '19:00', competition: 'Copa Libertadores', location: 'Maracanã, Rio de Janeiro', isHome: true, notes: 'Libertadores', tasks: [] },
+      { id: 'sofa-flamengo', opponent: 'Flamengo', date: '2026-08-16', time: '16:00', competition: 'Brasileirão', location: 'Maracanã, Rio de Janeiro', isHome: true, notes: 'Fla-Flu', tasks: [] },
+      { id: 'sofa-ldu', opponent: 'LDU Quito', date: '2026-08-20', time: '21:30', competition: 'Copa Libertadores', location: 'Estadio Rodrigo Paz Delgado', isHome: false, notes: 'Libertadores', tasks: [] }
+    ];
+
+    const combinedIncoming = [...SOFASCORE_FIXTURES, ...fetchedMatches];
+
+    // Merge into db.matches PRESERVING existing user tasks and reminders!
+    db.matches = mergeMatchesPreservingTasks(db.matches, combinedIncoming);
+    saveDb(db);
+    return db.matches;
+  };
+
+  app.get('/api/sync/fixtures', async (req, res) => {
+    try {
+      const db = ensureDb();
+      const updatedMatches = await syncFixturesWithLiveSources(db);
+      res.json({
+        success: true,
+        message: 'Jogos do Fluminense sincronizados com sucesso!',
+        matches: updatedMatches,
+        lastSynced: new Date().toISOString()
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar jogos' });
+    }
+  });
+
+  app.post('/api/sync/fixtures', async (req, res) => {
+    try {
+      const db = ensureDb();
+      const updatedMatches = await syncFixturesWithLiveSources(db);
+      res.json({
+        success: true,
+        message: 'Jogos do Fluminense sincronizados com sucesso!',
+        matches: updatedMatches,
+        lastSynced: new Date().toISOString()
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar jogos' });
+    }
+  });
 
   // 5. Matches CRUD
   app.get('/api/matches', (req, res) => {

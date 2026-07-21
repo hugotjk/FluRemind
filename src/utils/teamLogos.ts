@@ -39,6 +39,8 @@ const TEAM_LOGOS_MAP: Record<string, string> = {
   'vitória': 'https://upload.wikimedia.org/wikipedia/commons/8/80/Esporte_Clube_Vit%C3%B3ria_logo.svg',
   'ldu': 'https://upload.wikimedia.org/wikipedia/commons/2/22/Escudo_da_LDU.svg',
   'ldu quito': 'https://upload.wikimedia.org/wikipedia/commons/2/22/Escudo_da_LDU.svg',
+  'independiente riv.': 'https://upload.wikimedia.org/wikipedia/commons/e/ea/CSIR.png',
+  'independiente rivadavia': 'https://upload.wikimedia.org/wikipedia/commons/e/ea/CSIR.png',
   'river plate': 'https://upload.wikimedia.org/wikipedia/commons/a/ac/Escudo_del_C_A_River_Plate.svg',
   'boca juniors': 'https://upload.wikimedia.org/wikipedia/commons/4/41/Boca_Juniors_logo13.svg'
 };
@@ -138,17 +140,20 @@ export function mergeMatchesPreservingTasks(existingMatches: Match[], incomingMa
     if (m && m.opponent) {
       const opp = (m.opponent || '').trim().toLowerCase();
       const comp = (m.competition || '').trim().toLowerCase();
-      const nameKey = `${opp}_${comp}`;
+      const date = (m.date || '');
+      const nameKey = `${opp}_${comp}_${date}`;
       existingMap.set(nameKey, m);
+      existingMap.set(`${opp}_${comp}`, m);
     }
   });
 
-  const merged: Match[] = safeIncoming.map(inc => {
+  const rawMerged: Match[] = safeIncoming.map(inc => {
     if (!inc) return inc;
     const opp = (inc.opponent || '').trim().toLowerCase();
     const comp = (inc.competition || '').trim().toLowerCase();
-    const nameKey = `${opp}_${comp}`;
-    const matchedExisting = (inc.id ? existingMap.get(inc.id) : null) || existingMap.get(nameKey);
+    const date = (inc.date || '');
+    const nameKey = `${opp}_${comp}_${date}`;
+    const matchedExisting = (inc.id ? existingMap.get(inc.id) : null) || existingMap.get(nameKey) || existingMap.get(`${opp}_${comp}`);
 
     if (matchedExisting) {
       return {
@@ -167,13 +172,39 @@ export function mergeMatchesPreservingTasks(existingMatches: Match[], incomingMa
   safeExisting.forEach(m => {
     if (m && m.tasks && m.tasks.length > 0) {
       const opp = (m.opponent || '').toLowerCase();
-      const existsInMerged = merged.some(item => item && (item.id === m.id || (item.opponent || '').toLowerCase() === opp));
+      const existsInMerged = rawMerged.some(item => item && (item.id === m.id || (item.opponent || '').toLowerCase() === opp));
       if (!existsInMerged) {
-        merged.push(m);
+        rawMerged.push(m);
       }
     }
   });
 
+  // Strict deduplication by ID and key (opponent + comp + date) to ensure unique React keys
+  const seenIds = new Set<string>();
+  const seenKeys = new Set<string>();
+  const deduplicated: Match[] = [];
+
+  for (const match of rawMerged) {
+    if (!match) continue;
+    const opp = (match.opponent || '').trim().toLowerCase();
+    const comp = (match.competition || '').trim().toLowerCase();
+    const date = match.date || '';
+    const matchKey = `${opp}_${comp}_${date}`;
+
+    if (seenKeys.has(matchKey)) {
+      continue; // Skip duplicate match against same opponent on same competition/date
+    }
+
+    let finalId = match.id || `match-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    if (seenIds.has(finalId)) {
+      finalId = `${finalId}-${Math.random().toString(36).substring(2, 6)}`;
+    }
+
+    seenIds.add(finalId);
+    seenKeys.add(matchKey);
+    deduplicated.push({ ...match, id: finalId });
+  }
+
   // Sort by date and time
-  return merged.sort((a, b) => `${a?.date || ''}T${a?.time || '00:00'}`.localeCompare(`${b?.date || ''}T${b?.time || '00:00'}`));
+  return deduplicated.sort((a, b) => `${a?.date || ''}T${a?.time || '00:00'}`.localeCompare(`${b?.date || ''}T${b?.time || '00:00'}`));
 }

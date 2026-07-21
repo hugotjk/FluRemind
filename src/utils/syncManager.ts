@@ -77,6 +77,33 @@ export function saveLocalMatches(matches: Match[]) {
   }
 }
 
+export async function syncFixturesFromAPI(): Promise<{ success: boolean; matches?: Match[]; message?: string; error?: string }> {
+  try {
+    const res = await safeFetchJson<{ success: boolean; matches?: Match[]; message?: string; error?: string }>('/api/sync/fixtures', {
+      method: 'POST'
+    });
+
+    if (res.ok && res.data && res.data.matches) {
+      saveLocalMatches(res.data.matches);
+      return {
+        success: true,
+        matches: res.data.matches,
+        message: res.data.message || 'Jogos do Fluminense sincronizados com sucesso!'
+      };
+    } else {
+      return {
+        success: false,
+        error: res.error || 'Não foi possível sincronizar os jogos no momento.'
+      };
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Erro ao sincronizar os jogos.'
+    };
+  }
+}
+
 export const DEFAULT_TELEGRAM_BOT_TOKEN = '8951861356:AAHo0fczfX2TORYkuNQT8VMcN5aRdSuhLsc';
 export const DEFAULT_TELEGRAM_CHAT_ID = '640896648';
 
