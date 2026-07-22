@@ -323,6 +323,9 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
                         <Plus className="w-3.5 h-3.5" /> Adicionar Horário
                       </button>
                     </div>
+                    <p className="text-[11px] text-stone-600 mt-2 leading-snug bg-sky-50/80 p-2 rounded-lg border border-sky-200">
+                      💡 <strong>Regra de Disparo:</strong> As notificações das <strong>08:00</strong> e <strong>18:00</strong> ocorrem diariamente. O horário das <strong>12:00</strong> é enviado automaticamente na <strong>véspera</strong> e no <strong>dia</strong> dos jogos do Fluminense.
+                    </p>
                   </div>
 
                   {/* Filtro: Apenas em Dias de Jogos x Todos os Dias */}

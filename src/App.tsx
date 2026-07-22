@@ -290,10 +290,10 @@ export default function App() {
 
   const handleTriggerCronNow = async () => {
     try {
-      const res = await safeFetchJson<{ success: boolean; message: string }>('/api/cron/reminders', {
+      const res = await safeFetchJson<{ success: boolean; message: string }>('/api/cron/reminders?manual=true', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({ manual: true })
       });
 
       if (res.ok) {

@@ -86,6 +86,13 @@ function ensureDb(): DbSchema {
       saveDb(data);
     }
     if (!data.logs) data.logs = [];
+    if (data.telegramSettings?.autoSchedule?.notificationTimes) {
+      data.telegramSettings.autoSchedule.notificationTimes = data.telegramSettings.autoSchedule.notificationTimes
+        .filter(t => t !== '11:20');
+      if (data.telegramSettings.autoSchedule.notificationTimes.length === 0) {
+        data.telegramSettings.autoSchedule.notificationTimes = ['08:00', '12:00', '18:00'];
+      }
+    }
     return data;
   } catch (err) {
     console.error('Error reading db.json, falling back:', err);
@@ -483,9 +490,21 @@ function startBackgroundCronScheduler() {
           if (cloudData) {
             let dbUpdated = false;
             if (cloudData.telegramSettings && cloudData.telegramSettings.botToken) {
+              const currentTimes = db.telegramSettings?.autoSchedule?.notificationTimes || [];
+              const cloudTimes = cloudData.telegramSettings?.autoSchedule?.notificationTimes || [];
+              const mergedTimes = Array.from(new Set([...currentTimes, ...cloudTimes]))
+                .filter(t => t !== '11:20')
+                .sort();
+
               db.telegramSettings = {
                 ...db.telegramSettings,
-                ...cloudData.telegramSettings
+                ...cloudData.telegramSettings,
+                autoSchedule: {
+                  enabled: cloudData.telegramSettings.autoSchedule?.enabled ?? db.telegramSettings?.autoSchedule?.enabled ?? true,
+                  daysOfWeek: cloudData.telegramSettings.autoSchedule?.daysOfWeek || db.telegramSettings?.autoSchedule?.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
+                  notificationTimes: mergedTimes.length > 0 ? mergedTimes : ['08:00', '12:00', '18:00'],
+                  onlyOnMatchDays: cloudData.telegramSettings.autoSchedule?.onlyOnMatchDays ?? db.telegramSettings?.autoSchedule?.onlyOnMatchDays ?? false
+                }
               };
               dbUpdated = true;
             }
@@ -518,9 +537,23 @@ function startBackgroundCronScheduler() {
       const autoSchedule = db.telegramSettings?.autoSchedule;
       if (db.telegramSettings?.enabled && autoSchedule?.enabled) {
         const days = autoSchedule.daysOfWeek || [0, 1, 2, 3, 4, 5, 6];
-        const notifTimes = autoSchedule.notificationTimes || ['08:00', '12:00', '18:00'];
+        const rawTimes = autoSchedule.notificationTimes || ['08:00', '12:00', '18:00'];
+        const notifTimes = rawTimes.filter(t => t !== '11:20');
 
         if (days.includes(dayOfWeek) && notifTimes.includes(timeHHMM)) {
+          // Special rule for 12:00: only send on match day OR match eve (véspera do jogo)
+          if (timeHHMM === '12:00') {
+            const tomorrowObj = new Date(nowBR.getTime() + 24 * 60 * 60 * 1000);
+            const tomorrowStr = `${tomorrowObj.getFullYear()}-${String(tomorrowObj.getMonth() + 1).padStart(2, '0')}-${String(tomorrowObj.getDate()).padStart(2, '0')}`;
+            const hasMatchToday = (db.matches || []).some(m => m && m.date === dateStr);
+            const hasMatchTomorrow = (db.matches || []).some(m => m && m.date === tomorrowStr);
+
+            if (!hasMatchToday && !hasMatchTomorrow) {
+              console.log(`[TELEGRAM AUTO-NOTIFY BRT] Ignorando disparo das 12:00 (Hoje ${dateStr} não é dia de jogo nem véspera).`);
+              return;
+            }
+          }
+
           if (autoSchedule.onlyOnMatchDays) {
             const hasMatchToday = (db.matches || []).some(m => m && m.date === dateStr);
             if (!hasMatchToday) return;
@@ -667,10 +700,26 @@ async function startServer() {
     }
   });
 
-  // Manual Trigger for Next Match Reminder
+  // Manual / Cron Trigger for Next Match Reminder
   const handleCronReminders = async (req: express.Request, res: express.Response) => {
     try {
       const currentDb = ensureDb();
+      const nowBR = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      const hour = nowBR.getHours();
+      const isManual = req.query.manual === 'true' || req.body?.manual === true;
+
+      if (!isManual && hour === 12) {
+        const dateStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth() + 1).padStart(2, '0')}-${String(nowBR.getDate()).padStart(2, '0')}`;
+        const tomorrowObj = new Date(nowBR.getTime() + 24 * 60 * 60 * 1000);
+        const tomorrowStr = `${tomorrowObj.getFullYear()}-${String(tomorrowObj.getMonth() + 1).padStart(2, '0')}-${String(tomorrowObj.getDate()).padStart(2, '0')}`;
+        const hasMatchToday = (currentDb.matches || []).some(m => m && m.date === dateStr);
+        const hasMatchTomorrow = (currentDb.matches || []).some(m => m && m.date === tomorrowStr);
+
+        if (!hasMatchToday && !hasMatchTomorrow) {
+          return res.json({ success: true, message: 'Disparo das 12:00 ignorado pois hoje não é véspera nem dia de jogo.' });
+        }
+      }
+
       const result = await triggerNextMatchReminder(currentDb);
       res.json(result);
     } catch (err: any) {

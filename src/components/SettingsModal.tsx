@@ -392,6 +392,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Plus className="w-3.5 h-3.5" /> Adicionar Horário
                     </button>
                   </div>
+                  <p className="text-[11px] text-stone-500 mt-2 leading-snug bg-stone-50 p-2 rounded-lg border border-stone-200/80">
+                    💡 <strong>Regra de Disparo:</strong> As notificações das <strong>08:00</strong> e <strong>18:00</strong> ocorrem diariamente. O horário das <strong>12:00</strong> é enviado automaticamente na <strong>véspera</strong> e no <strong>dia</strong> dos jogos do Fluminense.
+                  </p>
                 </div>
               </div>
 
