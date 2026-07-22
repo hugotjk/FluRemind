@@ -16,7 +16,9 @@ import {
   getLocalLogs,
   saveLocalLogs,
   syncFixturesAndSheet,
-  pushCloudData
+  pushCloudData,
+  formatMatchTelegramMessageClient,
+  sendTelegramNotificationDirect
 } from './utils/syncManager';
 
 export default function App() {
@@ -259,33 +261,62 @@ export default function App() {
   };
 
   const handleTestConnection = async () => {
-    const res = await safeFetchJson<{ success: boolean; message: string }>('/api/telegram/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    });
+    try {
+      const res = await safeFetchJson<{ success: boolean; message: string }>('/api/telegram/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
 
-    if (!res.ok) {
-      throw new Error(res.error || 'Falha ao enviar mensagem de teste');
+      if (res.ok) {
+        showToast('Mensagem enviada com sucesso no Telegram! 🇭🇺');
+        return;
+      }
+    } catch (e) {}
+
+    // Direct fallback client side
+    const tg = getLocalTelegramSettings();
+    if (tg && tg.botToken && tg.chatId) {
+      await sendTelegramNotificationDirect(
+        tg.botToken,
+        tg.chatId,
+        '🇭🇺 *TESTE DE CONEXÃO DO FLUMINENSE* ⚽\n\nSua integração com o Telegram está funcionando perfeitamente! Saudações Tricolores!'
+      );
+      showToast('Mensagem enviada com sucesso no Telegram! 🇭🇺');
+    } else {
+      throw new Error('Configure o Bot Token e o Chat ID antes de testar.');
     }
-    showToast('Mensagem enviada com sucesso no Telegram! 🇭🇺');
   };
 
   const handleTriggerCronNow = async () => {
-    const res = await safeFetchJson<{ success: boolean; message: string }>('/api/cron/reminders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    });
+    try {
+      const res = await safeFetchJson<{ success: boolean; message: string }>('/api/cron/reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
 
-    if (!res.ok) {
-      throw new Error(res.error || 'Erro ao disparar lembrete');
-    }
-    showToast('Lembrete do próximo jogo enviado no Telegram! 🇭🇺');
-    // Refresh logs
-    const logsRes = await safeFetchJson<NotificationLog[]>('/api/logs');
-    if (logsRes.ok && Array.isArray(logsRes.data)) {
-      setLogs(logsRes.data);
+      if (res.ok) {
+        showToast('Lembrete do próximo jogo enviado no Telegram! 🇭🇺');
+        const logsRes = await safeFetchJson<NotificationLog[]>('/api/logs');
+        if (logsRes.ok && Array.isArray(logsRes.data)) {
+          setLogs(logsRes.data);
+        }
+        return;
+      }
+    } catch (e) {}
+
+    // Direct fallback client side
+    const tg = getLocalTelegramSettings();
+    const safeList = Array.isArray(matches) ? matches : [];
+    const upcoming = safeList.filter(m => m && m.date && m.date >= new Date().toISOString().split('T')[0]);
+    const nextMatchItem = upcoming[0] || safeList[0];
+    if (tg && tg.botToken && tg.chatId && nextMatchItem) {
+      const msgText = formatMatchTelegramMessageClient(nextMatchItem);
+      await sendTelegramNotificationDirect(tg.botToken, tg.chatId, msgText);
+      showToast('Lembrete do próximo jogo enviado no Telegram! 🇭🇺');
+    } else {
+      throw new Error('Nenhum jogo ou configuração do Telegram encontrada.');
     }
   };
 
@@ -299,8 +330,19 @@ export default function App() {
 
       if (res.ok) {
         showToast(`Lembrete disparado no Telegram para ${match.opponent}! 🇭🇺`);
+        return;
+      }
+    } catch (err: any) {}
+
+    // Direct fallback client side
+    try {
+      const tg = getLocalTelegramSettings();
+      if (tg && tg.botToken && tg.chatId) {
+        const msgText = formatMatchTelegramMessageClient(match);
+        await sendTelegramNotificationDirect(tg.botToken, tg.chatId, msgText);
+        showToast(`Lembrete disparado no Telegram para ${match.opponent}! 🇭🇺`);
       } else {
-        showToast(res.error || 'Erro ao notificar no Telegram', 'error');
+        showToast('Configure o Telegram nas configurações antes de enviar.', 'error');
       }
     } catch (err: any) {
       showToast(err.message || 'Falha ao comunicar com Telegram', 'error');

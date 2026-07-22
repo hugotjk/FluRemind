@@ -403,3 +403,107 @@ export async function syncFixturesAndSheet(): Promise<Match[]> {
   return localMatches;
 }
 
+export function formatMatchTelegramMessageClient(match: Match): string {
+  const nowBR = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const dateParts = (match.date || '').split('-');
+  const year = parseInt(dateParts[0], 10);
+  const month = parseInt(dateParts[1], 10);
+  const day = parseInt(dateParts[2], 10);
+
+  const formattedDate = (day && month && year) ? `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}` : match.date;
+
+  const matchDateObj = new Date(year, month - 1, day);
+  const todayDateObj = new Date(nowBR.getFullYear(), nowBR.getMonth(), nowBR.getDate());
+  const diffTime = matchDateObj.getTime() - todayDateObj.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+
+  let headerTitle = '';
+  if (diffDays === 0) {
+    headerTitle = `🚨 *HOJE TEM FLUMINENSE!* ⚽`;
+  } else if (diffDays === 1) {
+    headerTitle = `⏳ *AMANHÃ TEM FLUMINENSE!* ⚽`;
+  } else if (diffDays > 1) {
+    headerTitle = `📅 *PRÓXIMO JOGO DO FLUMINENSE (em ${diffDays} dias - ${formattedDate})* ⚽`;
+  } else {
+    headerTitle = `🏁 *PARTIDA DO FLUMINENSE (${formattedDate})* ⚽`;
+  }
+
+  const homeTeam = match.homeTeam || (match.isHome ? 'Fluminense' : match.opponent);
+  const awayTeam = match.awayTeam || (match.isHome ? match.opponent : 'Fluminense');
+
+  let msg = `🇭🇺 ${headerTitle}\n\n`;
+  msg += `🛡️ *${homeTeam} vs ${awayTeam}*\n`;
+  msg += `🏆 *Competição:* ${match.competition}\n`;
+  msg += `⏰ *Horário:* ${match.time || '16:00'} hrs (${formattedDate})\n\n`;
+
+  if (match.notes) {
+    msg += `📝 *Observação:* ${match.notes}\n\n`;
+  }
+
+  const pendingTasks = (match.tasks || []).filter(t => !t.completed);
+  const doneTasks = (match.tasks || []).filter(t => t.completed);
+
+  msg += `📋 *CHECKLIST DE TAREFAS (${doneTasks.length}/${(match.tasks || []).length} concluídas):*\n`;
+
+  if (!match.tasks || match.tasks.length === 0) {
+    msg += `_Nenhuma tarefa cadastrada para este jogo._\n`;
+  } else {
+    match.tasks.forEach(t => {
+      const statusIcon = t.completed ? '✅' : '⏳';
+      msg += `${statusIcon} ${t.text}\n`;
+    });
+  }
+
+  if (pendingTasks.length > 0) {
+    msg += `\n⚠️ *Atenção:* Você possui *${pendingTasks.length}* tarefa(s) pendente(s)!`;
+  } else if (match.tasks && match.tasks.length > 0) {
+    msg += `\n🎉 *Tudo pronto!* Todas as tarefas foram concluídas!`;
+  }
+
+  msg += `\n\n🔥 *VAMOS, TRICOLOR! VENCER OU VENCER!* 🇭🇺`;
+
+  return msg;
+}
+
+export async function sendTelegramNotificationDirect(token: string, chatId: string, text: string) {
+  if (!token || !chatId) {
+    throw new Error('Configure o Bot Token e o Chat ID nas configurações do Telegram antes de enviar.');
+  }
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  
+  // Try sending with Markdown
+  const resMd = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'Markdown'
+    })
+  });
+  const dataMd = await resMd.json();
+
+  if (resMd.ok && dataMd.ok) {
+    return dataMd;
+  }
+
+  // Fallback to plain text if Markdown fails
+  const resPlain = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text
+    })
+  });
+  const dataPlain = await resPlain.json();
+
+  if (!resPlain.ok || !dataPlain.ok) {
+    throw new Error(dataPlain.description || dataMd.description || 'Falha ao enviar mensagem ao Telegram');
+  }
+
+  return dataPlain;
+}
+
+
