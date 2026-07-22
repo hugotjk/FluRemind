@@ -25,7 +25,7 @@ import { INITIAL_MATCHES } from './data/initialData';
 import { mergeMatchesPreservingTasks } from './utils/teamLogos';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'matches' | 'logs' | 'export'>('matches');
+  const [activeTab, setActiveTab] = useState<'matches' | 'past_matches' | 'logs' | 'export'>('matches');
   
   // Data State
   const [matches, setMatches] = useState<Match[]>([]);
@@ -491,17 +491,26 @@ export default function App() {
     showToast('Histórico limpo');
   };
 
-  // Find next upcoming match
+  // Filter and sort matches by date
   const todayStr = new Date().toISOString().split('T')[0];
   const safeMatchesList = Array.isArray(matches) ? matches : [];
+
+  // Upcoming matches (date >= today) for main screen
   const upcomingMatches = [...safeMatchesList]
     .filter(m => m && m.date && m.date >= todayStr)
     .sort((a, b) => `${a.date || ''}T${a.time || '00:00'}`.localeCompare(`${b.date || ''}T${b.time || '00:00'}`));
-  
-  const nextMatch = upcomingMatches[0] || safeMatchesList[0] || null;
 
-  // Filter and sort matches by date
-  const filteredMatches = safeMatchesList
+  // Past matches (date < today)
+  const pastMatches = [...safeMatchesList]
+    .filter(m => m && m.date && m.date < todayStr)
+    .sort((a, b) => `${b.date || ''}T${b.time || '00:00'}`.localeCompare(`${a.date || ''}T${a.time || '00:00'}`));
+
+  const nextMatch = upcomingMatches[0] || null;
+
+  // Active list based on selected tab
+  const currentTabMatches = activeTab === 'past_matches' ? pastMatches : upcomingMatches;
+
+  const filteredMatches = currentTabMatches
     .filter(m => {
       if (!m) return false;
 
@@ -525,8 +534,7 @@ export default function App() {
       }
 
       return true;
-    })
-    .sort((a, b) => `${a.date || ''}T${a.time || '00:00'}`.localeCompare(`${b.date || ''}T${b.time || '00:00'}`));
+    });
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900 font-sans pb-16">
@@ -681,6 +689,119 @@ export default function App() {
                   <Plus className="w-4 h-4" />
                   <span>Cadastrar Novo Jogo Manualmente</span>
                 </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredMatches.map((match, idx) => (
+                  <MatchCard
+                    key={`${match.id}-${idx}`}
+                    match={match}
+                    onEdit={(m) => {
+                      setEditingMatch(m);
+                      setIsMatchModalOpen(true);
+                    }}
+                    onDelete={handleDeleteMatch}
+                    onToggleTask={handleToggleTask}
+                    onAddTask={handleAddTask}
+                    onDeleteTask={handleDeleteTask}
+                    onNotifyMatch={(m) => {
+                      handleSendTestNotification(undefined, m.id)
+                        .then(() => showToast(`Lembrete disparado no Telegram para ${m.opponent}! 🇭🇺`))
+                        .catch((err) => showToast(err.message, 'error'));
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Tab 1.5: Past Matches */}
+        {activeTab === 'past_matches' && (
+          <>
+            <div className="bg-gradient-to-r from-stone-800 to-stone-900 text-white rounded-2xl p-5 shadow-lg border border-stone-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold font-serif flex items-center gap-2">
+                  <span>🏁 Jogos Anteriores do Fluminense</span>
+                </h2>
+                <p className="text-xs text-stone-300 mt-1">
+                  Histórico de partidas passadas e tarefas salvas para cada confronto específico.
+                </p>
+              </div>
+              <div className="text-xs px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 font-medium">
+                Total de jogos anteriores: <strong>{pastMatches.length}</strong>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+                <span className="text-xs font-bold text-stone-400 flex items-center gap-1 mr-1">
+                  <Filter className="w-3.5 h-3.5" /> Filtrar:
+                </span>
+
+                <button
+                  onClick={() => setSelectedVenue('Todos')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    selectedVenue === 'Todos' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  onClick={() => setSelectedVenue('Casa')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    selectedVenue === 'Casa' ? 'bg-[#006633] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  🏠 Casa
+                </button>
+                <button
+                  onClick={() => setSelectedVenue('Fora')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    selectedVenue === 'Fora' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  ✈️ Fora
+                </button>
+
+                {['Brasileirão', 'Copa Libertadores', 'Copa do Brasil'].map(comp => (
+                  <button
+                    key={comp}
+                    onClick={() => setSelectedComp(selectedComp === comp ? 'Todos' : comp)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                      selectedComp === comp
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    }`}
+                  >
+                    {comp}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative flex-1 sm:w-56">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-stone-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar no histórico..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full text-xs pl-9 pr-3 py-2 rounded-xl bg-stone-100 border border-stone-200 focus:outline-none focus:ring-2 focus:ring-[#722F37]"
+                />
+              </div>
+
+            </div>
+
+            {/* Past Matches List */}
+            {filteredMatches.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-2">
+                <Shield className="w-10 h-10 text-stone-300 mx-auto" />
+                <h3 className="text-sm font-bold text-stone-800">Nenhum jogo anterior encontrado</h3>
+                <p className="text-xs text-stone-500">
+                  Jogos com data anterior à de hoje aparecerão automaticamente aqui.
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

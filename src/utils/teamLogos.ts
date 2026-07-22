@@ -137,13 +137,14 @@ export function mergeMatchesPreservingTasks(existingMatches: Match[], incomingMa
     if (m && m.id) {
       existingMap.set(m.id, m);
     }
-    if (m && m.opponent) {
+    if (m && m.opponent && m.date) {
       const opp = (m.opponent || '').trim().toLowerCase();
       const comp = (m.competition || '').trim().toLowerCase();
       const date = (m.date || '');
       const nameKey = `${opp}_${comp}_${date}`;
+      const oppDateKey = `${opp}_${date}`;
       existingMap.set(nameKey, m);
-      existingMap.set(`${opp}_${comp}`, m);
+      existingMap.set(oppDateKey, m);
     }
   });
 
@@ -153,13 +154,14 @@ export function mergeMatchesPreservingTasks(existingMatches: Match[], incomingMa
     const comp = (inc.competition || '').trim().toLowerCase();
     const date = (inc.date || '');
     const nameKey = `${opp}_${comp}_${date}`;
-    const matchedExisting = (inc.id ? existingMap.get(inc.id) : null) || existingMap.get(nameKey) || existingMap.get(`${opp}_${comp}`);
+    const oppDateKey = `${opp}_${date}`;
+    const matchedExisting = (inc.id ? existingMap.get(inc.id) : null) || existingMap.get(nameKey) || existingMap.get(oppDateKey);
 
     if (matchedExisting) {
       return {
         ...inc,
         id: matchedExisting.id, // Keep consistent ID
-        // Preserve user's checklist tasks if incoming doesn't have tasks or existing has tasks
+        // Preserve user's checklist tasks strictly for this specific match date
         tasks: (inc.tasks && inc.tasks.length > 0) ? inc.tasks : (matchedExisting.tasks || []),
         notes: inc.notes || matchedExisting.notes
       };
@@ -172,7 +174,7 @@ export function mergeMatchesPreservingTasks(existingMatches: Match[], incomingMa
   safeExisting.forEach(m => {
     if (m && m.tasks && m.tasks.length > 0) {
       const opp = (m.opponent || '').toLowerCase();
-      const existsInMerged = rawMerged.some(item => item && (item.id === m.id || (item.opponent || '').toLowerCase() === opp));
+      const existsInMerged = rawMerged.some(item => item && (item.id === m.id || ((item.opponent || '').toLowerCase() === opp && item.date === m.date)));
       if (!existsInMerged) {
         rawMerged.push(m);
       }

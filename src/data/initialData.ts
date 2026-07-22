@@ -21,9 +21,7 @@ export const INITIAL_MATCHES: Match[] = [
     location: 'Maracanã, Rio de Janeiro',
     isHome: true,
     notes: 'Rodada 18 do Campeonato Brasileiro',
-    tasks: [
-      { id: 't-1', text: 'Levar meias Rikam', completed: false, priority: 'normal' }
-    ]
+    tasks: []
   },
   {
     id: 'match-vasco-1',
@@ -34,9 +32,7 @@ export const INITIAL_MATCHES: Match[] = [
     location: 'São Januário, Rio de Janeiro',
     isHome: false,
     notes: 'Jogo de ida das oitavas de final',
-    tasks: [
-      { id: 't-2', text: 'Comprar ingresso do setor visitante', completed: false, priority: 'high' }
-    ]
+    tasks: []
   },
   {
     id: 'match-vasco-2',
@@ -95,10 +91,4 @@ export const INITIAL_MATCHES: Match[] = [
   }
 ];
 
-export const PRESET_TASKS: string[] = [
-  'Levar meias Rikam',
-  'Comprar ingressos de sócio',
-  'Organizar transporte de ida e volta',
-  'Separar camisa tricolor da sorte',
-  'Chegar com 2h de antecedência'
-];
+export const PRESET_TASKS: string[] = [];

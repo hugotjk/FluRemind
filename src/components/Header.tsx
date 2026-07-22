@@ -1,10 +1,10 @@
 import React from 'react';
-import { Calendar, Send, Terminal, Settings, Shield, BellRing, Sparkles, Plus, CloudCheck, RefreshCw } from 'lucide-react';
+import { Calendar, History, Send, Terminal, Settings, Shield, BellRing, Sparkles, Plus, CloudCheck, RefreshCw } from 'lucide-react';
 import { SystemStatus } from '../types';
 
 interface HeaderProps {
-  activeTab: 'matches' | 'logs' | 'export';
-  setActiveTab: (tab: 'matches' | 'logs' | 'export') => void;
+  activeTab: 'matches' | 'past_matches' | 'logs' | 'export';
+  setActiveTab: (tab: 'matches' | 'past_matches' | 'logs' | 'export') => void;
   status: SystemStatus | null;
   onOpenTelegramSettings: () => void;
   onOpenTestNotification: () => void;
@@ -67,7 +67,19 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>Jogos & Tarefas</span>
+              <span>Próximos Jogos</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('past_matches')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'past_matches'
+                  ? 'bg-white text-[#722F37] shadow-md font-bold'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Jogos Anteriores</span>
             </button>
 
             <button
