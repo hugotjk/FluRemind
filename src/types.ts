@@ -17,6 +17,10 @@ export interface Match {
   id: string;
   opponent: string;
   opponentLogo?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  homeLogo?: string;
+  awayLogo?: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   competition: Competition;
@@ -29,7 +33,7 @@ export interface Match {
 export interface AutoScheduleSettings {
   enabled: boolean;
   daysOfWeek: number[]; // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb
-  notificationTimes: string[]; // Ex: ["09:00", "12:00", "18:00"]
+  notificationTimes: string[]; // Ex: ["08:00", "12:00", "18:00"]
   onlyOnMatchDays: boolean; // Notificar apenas se houver jogo no dia
 }
 

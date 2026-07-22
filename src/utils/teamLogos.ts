@@ -69,11 +69,37 @@ export function formatOpponentName(name: string): string {
 }
 
 /**
+ * Converts image links (including Google Drive view links) to direct embeddable image URLs
+ */
+export function formatImageUrl(url?: string): string {
+  if (!url || !url.trim()) return '';
+  const clean = url.trim();
+
+  if (clean.includes('drive.google.com') || clean.includes('drive.usercontent.google.com')) {
+    let fileId = '';
+    const matchD = clean.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    const matchId = clean.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (matchD && matchD[1]) {
+      fileId = matchD[1];
+    } else if (matchId && matchId[1]) {
+      fileId = matchId[1];
+    }
+
+    if (fileId) {
+      return `https://lh3.googleusercontent.com/d/${fileId}`;
+    }
+  }
+
+  return clean;
+}
+
+/**
  * Gets the crest URL for an opponent team
  */
 export function getOpponentLogo(name: string, customLogo?: string): string {
-  if (customLogo && customLogo.trim()) return customLogo.trim();
-  if (!name) return 'https://upload.wikimedia.org/wikipedia/commons/5/52/Botafogo_de_Futebol_e_Regatas_logo.svg';
+  const formattedCustom = formatImageUrl(customLogo);
+  if (formattedCustom) return formattedCustom;
+  if (!name) return FLUMINENSE_LOGO;
 
   const clean = (name || '').trim().toLowerCase();
   
@@ -88,38 +114,37 @@ export function getOpponentLogo(name: string, customLogo?: string): string {
     }
   }
 
-  // Generic crest fallback SVG placeholder via SVG data URI
-  return 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Fluminense_FC_escudo.svg';
+  // Generic crest fallback SVG placeholder
+  return FLUMINENSE_LOGO;
 }
 
 /**
  * Formats match teams according to Home (Mandante) vs Away (Visitante) rules
  */
 export function formatMatchTeams(match: Match) {
-  const formattedOpponent = formatOpponentName(match.opponent || 'Adversário');
-  const opponentLogoUrl = getOpponentLogo(match.opponent || '', match.opponentLogo);
+  const homeCustomLogo = formatImageUrl(match.homeLogo);
+  const awayCustomLogo = formatImageUrl(match.awayLogo);
 
-  if (match.isHome) {
-    // Fluminense é Mandante (Casa)
-    return {
-      homeTeam: 'FLUMINENSE',
-      homeLogo: FLUMINENSE_LOGO,
-      homeIsFlu: true,
-      awayTeam: formattedOpponent,
-      awayLogo: opponentLogoUrl,
-      awayIsFlu: false
-    };
-  } else {
-    // Adversário é Mandante (Fora de Casa)
-    return {
-      homeTeam: formattedOpponent,
-      homeLogo: opponentLogoUrl,
-      homeIsFlu: false,
-      awayTeam: 'FLUMINENSE',
-      awayLogo: FLUMINENSE_LOGO,
-      awayIsFlu: true
-    };
-  }
+  const homeTeamName = match.homeTeam ? formatOpponentName(match.homeTeam) : (match.isHome ? 'FLUMINENSE' : formatOpponentName(match.opponent));
+  const awayTeamName = match.awayTeam ? formatOpponentName(match.awayTeam) : (match.isHome ? formatOpponentName(match.opponent) : 'FLUMINENSE');
+
+  const homeIsFlu = homeTeamName.toUpperCase() === 'FLUMINENSE' || homeTeamName.toUpperCase() === 'FLU';
+  const awayIsFlu = awayTeamName.toUpperCase() === 'FLUMINENSE' || awayTeamName.toUpperCase() === 'FLU';
+
+  const defaultHomeLogo = homeIsFlu ? FLUMINENSE_LOGO : getOpponentLogo(homeTeamName);
+  const defaultAwayLogo = awayIsFlu ? FLUMINENSE_LOGO : getOpponentLogo(awayTeamName);
+
+  const finalHomeLogo = homeCustomLogo || defaultHomeLogo;
+  const finalAwayLogo = awayCustomLogo || defaultAwayLogo;
+
+  return {
+    homeTeam: homeTeamName,
+    homeLogo: finalHomeLogo,
+    homeIsFlu,
+    awayTeam: awayTeamName,
+    awayLogo: finalAwayLogo,
+    awayIsFlu
+  };
 }
 
 /**

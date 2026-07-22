@@ -1,31 +1,19 @@
 import React from 'react';
-import { Calendar, History, Send, Terminal, Settings, Shield, BellRing, Sparkles, Plus, CloudCheck, RefreshCw } from 'lucide-react';
+import { Calendar, CalendarDays, History, Settings } from 'lucide-react';
 import { SystemStatus } from '../types';
 
 interface HeaderProps {
-  activeTab: 'matches' | 'past_matches' | 'logs' | 'export';
-  setActiveTab: (tab: 'matches' | 'past_matches' | 'logs' | 'export') => void;
+  activeTab: 'matches' | 'past_matches' | 'calendar' | 'logs';
+  setActiveTab: (tab: 'matches' | 'past_matches' | 'calendar' | 'logs') => void;
   status: SystemStatus | null;
-  onOpenTelegramSettings: () => void;
-  onOpenTestNotification: () => void;
-  onOpenAddMatch: () => void;
-  onTriggerCronToday: () => void;
-  isTriggeringCron: boolean;
-  onSyncFixtures: () => void;
-  isSyncingFixtures: boolean;
+  onOpenSettings: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
   status,
-  onOpenTelegramSettings,
-  onOpenTestNotification,
-  onOpenAddMatch,
-  onTriggerCronToday,
-  isTriggeringCron,
-  onSyncFixtures,
-  isSyncingFixtures
+  onOpenSettings
 }) => {
   return (
     <header className="bg-gradient-to-r from-[#5a0c1a] via-[#722F37] to-[#004d26] text-white border-b-4 border-[#e6b800] shadow-xl sticky top-0 z-30">
@@ -60,19 +48,19 @@ export const Header: React.FC<HeaderProps> = ({
           <nav className="flex items-center gap-1.5 bg-black/25 p-1 rounded-xl border border-white/10 self-start md:self-auto overflow-x-auto max-w-full">
             <button
               onClick={() => setActiveTab('matches')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'matches'
                   ? 'bg-white text-[#722F37] shadow-md font-bold'
                   : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>Próximos Jogos</span>
+              <span>Próximos Jogos (Casa)</span>
             </button>
 
             <button
               onClick={() => setActiveTab('past_matches')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'past_matches'
                   ? 'bg-white text-[#722F37] shadow-md font-bold'
                   : 'text-white/80 hover:text-white hover:bg-white/10'
@@ -83,101 +71,39 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             <button
-              onClick={() => setActiveTab('logs')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'logs'
-                  ? 'bg-white text-[#722F37] shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              onClick={() => setActiveTab('calendar')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'calendar'
+                  ? 'bg-[#e6b800] text-[#5a0c1a] shadow-md font-black'
+                  : 'text-[#e6b800] hover:bg-white/10'
               }`}
             >
-              <Terminal className="w-3.5 h-3.5" />
-              <span>Histórico de Envios</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('export')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'export'
-                  ? 'bg-[#e6b800] text-[#5a0c1a] shadow-md font-bold'
-                  : 'text-[#e6b800] hover:bg-[#e6b800]/10 border border-[#e6b800]/30'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Guia Vercel & Code</span>
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>📅 Calendário Geral</span>
             </button>
           </nav>
 
-          {/* Header Actions */}
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            
-            {/* Primary Add Match Button */}
+          {/* Header Action: Calendar Tab beside Settings */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={onOpenAddMatch}
-              className="flex items-center gap-1.5 text-xs font-black px-3.5 py-2 rounded-lg bg-[#e6b800] hover:bg-amber-400 text-[#5a0c1a] shadow-lg transition-all active:scale-95"
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Cadastrar Jogo</span>
-            </button>
-
-            {/* Telegram Status Pill */}
-            <button
-              onClick={onOpenTelegramSettings}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
-                status?.telegramConfigured
-                  ? 'bg-emerald-950/60 text-emerald-200 border-emerald-500/40 hover:bg-emerald-900/60'
-                  : 'bg-amber-950/60 text-amber-200 border-amber-500/40 hover:bg-amber-900/60'
+              onClick={() => setActiveTab('calendar')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow cursor-pointer active:scale-95 border ${
+                activeTab === 'calendar'
+                  ? 'bg-[#e6b800] text-[#5a0c1a] border-[#e6b800]'
+                  : 'bg-white/10 hover:bg-white/20 border-white/25 text-[#e6b800]'
               }`}
-              title="Configurar Telegram Bot"
             >
-              <Send className="w-3.5 h-3.5 text-sky-400" />
-              <span className="hidden sm:inline">Telegram:</span>
-              <span className="font-bold">
-                {status?.telegramConfigured ? 'Conectado ✅' : 'Configurar ⚠️'}
-              </span>
-              <Settings className="w-3 h-3 text-white/60 ml-0.5" />
+              <CalendarDays className="w-4 h-4 text-[#e6b800]" />
+              <span>Calendário</span>
             </button>
 
-            {/* Manual Test Notification Button */}
             <button
-              onClick={onOpenTestNotification}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white shadow transition-all active:scale-95"
-              title="Testar Envio no Telegram"
+              onClick={onOpenSettings}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-xs font-bold transition-all shadow cursor-pointer active:scale-95"
             >
-              <BellRing className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Testar Envio</span>
+              <Settings className="w-4 h-4 text-[#e6b800]" />
+              <span>Configuração</span>
             </button>
-
-            {/* Run Today's Cron Button */}
-            <button
-              onClick={onTriggerCronToday}
-              disabled={isTriggeringCron}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white shadow transition-all active:scale-95"
-              title="Disparar verificação de hoje (Simular Vercel Cron)"
-            >
-              <Shield className={`w-3.5 h-3.5 ${isTriggeringCron ? 'animate-spin' : ''}`} />
-              <span className="hidden md:inline">Verificar Hoje</span>
-            </button>
-
-            {/* Sync Fixtures Button (Sofascore & APIs) */}
-            <button
-              onClick={onSyncFixtures}
-              disabled={isSyncingFixtures}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white shadow transition-all active:scale-95"
-              title="Buscar atualização dos jogos do Fluminense no Sofascore e APIs"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFixtures ? 'animate-spin' : ''}`} />
-              <span>{isSyncingFixtures ? 'Sincronizando...' : 'Sincronizar Jogos'}</span>
-            </button>
-
-            {/* Auto Cloud Sync Badge */}
-            <div
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-black/40 text-emerald-300 border border-emerald-500/30 shadow-inner"
-              title="Sincronização automática ativa em todos os dispositivos que acessarem o link"
-            >
-              <CloudCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden lg:inline">Sincronizado na Nuvem</span>
-            </div>
-
           </div>
 
         </div>

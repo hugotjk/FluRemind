@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Send, CheckCircle2, AlertCircle, Shield, Sparkles } from 'lucide-react';
+import { Calendar, Clock, Shield, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Match } from '../types';
 import { formatMatchTeams } from '../utils/teamLogos';
 
 interface NextMatchHeroProps {
   match: Match | null;
-  onOpenChecklist: (match: Match) => void;
-  onTestTelegramMatch: (match: Match) => void;
+  onOpenChecklist?: (match: Match) => void;
+  onTestTelegramMatch?: (match: Match) => void;
 }
 
 export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
-  match,
-  onOpenChecklist,
-  onTestTelegramMatch
+  match
 }) => {
   const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number; isToday: boolean } | null>(null);
 
@@ -49,8 +47,8 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
     return (
       <div className="bg-gradient-to-r from-stone-900 to-stone-800 text-white rounded-2xl p-6 shadow-xl border border-stone-700 text-center">
         <Shield className="w-12 h-12 text-[#e6b800] mx-auto mb-2 opacity-80" />
-        <h3 className="text-lg font-bold">Nenhum próximo jogo cadastrado</h3>
-        <p className="text-xs text-stone-400 mt-1">Clique em "+ Novo Jogo" para adicionar a próxima partida do Tricolor!</p>
+        <h3 className="text-lg font-bold">Nenhum próximo jogo do Fluminense em casa</h3>
+        <p className="text-xs text-stone-400 mt-1">Os jogos em casa serão sincronizados automaticamente da planilha do Google Drive.</p>
       </div>
     );
   }
@@ -77,7 +75,7 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
               </span>
             ) : (
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#e6b800] text-[#5a0c1a] flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> PRÓXIMO CONFLITO
+                <Sparkles className="w-3 h-3" /> PRÓXIMO JOGO
               </span>
             )}
 
@@ -94,7 +92,7 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
             const { homeTeam, homeLogo, homeIsFlu, awayTeam, awayLogo, awayIsFlu } = formatMatchTeams(match);
             return (
               <div className="flex items-center gap-3 flex-wrap py-1">
-                {/* Mandante (Escudo ANTES) */}
+                {/* Mandante (Foto à esquerda) */}
                 <div className="flex items-center gap-2">
                   <img
                     src={homeLogo}
@@ -109,7 +107,7 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
 
                 <span className="text-xl sm:text-2xl font-bold text-[#e6b800] px-1">VS</span>
 
-                {/* Visitante (Escudo APÓS) */}
+                {/* Visitante (Foto à direita) */}
                 <div className="flex items-center gap-2">
                   <span className={`text-2xl sm:text-3xl font-black font-serif tracking-tight ${awayIsFlu ? 'text-white' : 'text-amber-100'}`}>
                     {awayTeam}
@@ -134,11 +132,6 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
             <div className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10">
               <Clock className="w-3.5 h-3.5 text-[#e6b800]" />
               <span>{match.time || '16:00'} hrs</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10">
-              <MapPin className="w-3.5 h-3.5 text-[#e6b800]" />
-              <span>{match.location || 'Maracanã'}</span>
             </div>
           </div>
 
@@ -169,7 +162,7 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
           </div>
         </div>
 
-        {/* Right Side: Countdown Timer & Quick Action Buttons */}
+        {/* Right Side: Countdown Timer */}
         <div className="flex flex-col items-center lg:items-end gap-4 min-w-[240px]">
           {/* Countdown Clock */}
           {timeLeft && (
@@ -197,25 +190,6 @@ export const NextMatchHero: React.FC<NextMatchHeroProps> = ({
               </div>
             </div>
           )}
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 w-full">
-            <button
-              onClick={() => onOpenChecklist(match)}
-              className="flex-1 py-2 px-3 rounded-xl bg-white text-[#5a0c1a] font-bold text-xs hover:bg-stone-100 transition-all shadow text-center"
-            >
-              📋 Ver Tarefas
-            </button>
-
-            <button
-              onClick={() => onTestTelegramMatch(match)}
-              className="py-2 px-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs transition-all shadow flex items-center justify-center gap-1.5 whitespace-nowrap"
-              title="Notificar este jogo no Telegram agora"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>Notificar</span>
-            </button>
-          </div>
         </div>
 
       </div>

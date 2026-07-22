@@ -1,26 +1,26 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, CheckSquare, Plus, Send, Edit, Trash2, ChevronDown, ChevronUp, AlertCircle, Shield } from 'lucide-react';
-import { Match, Task } from '../types';
+import { Calendar, Clock, CheckSquare, Plus, Send, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Match } from '../types';
 import { formatMatchTeams } from '../utils/teamLogos';
 
 interface MatchCardProps {
   match: Match;
-  onEdit: (match: Match) => void;
   onDelete: (id: string) => void;
   onToggleTask: (matchId: string, taskId: string, completed: boolean) => void;
   onAddTask: (matchId: string, text: string) => void;
   onDeleteTask: (matchId: string, taskId: string) => void;
   onNotifyMatch: (match: Match) => void;
+  onOpenChecklist?: (match: Match) => void;
 }
 
 export const MatchCard: React.FC<MatchCardProps> = ({
   match,
-  onEdit,
   onDelete,
   onToggleTask,
   onAddTask,
   onDeleteTask,
-  onNotifyMatch
+  onNotifyMatch,
+  onOpenChecklist
 }) => {
   const [expanded, setExpanded] = useState<boolean>(true);
   const [newTaskText, setNewTaskText] = useState('');
@@ -43,7 +43,6 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     setIsSubmittingTask(false);
   };
 
-  // Get competition color theme
   const getCompColor = (comp: string) => {
     switch (comp) {
       case 'Copa Libertadores':
@@ -71,7 +70,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           {(() => {
             const { homeTeam, homeLogo, homeIsFlu, awayTeam, awayLogo, awayIsFlu } = formatMatchTeams(match);
             return (
-              <div className="space-y-1.5 max-w-full">
+              <div className="space-y-1.5 max-w-full flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   {isToday && (
                     <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-rose-600 text-white animate-pulse">
@@ -82,30 +81,30 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                     {match.competition}
                   </span>
                   <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-stone-200 text-stone-700">
-                    {match.isHome ? '🏠 Casa (Maracanã)' : '✈️ Fora'}
+                    {match.isHome ? '🏠 Casa' : '✈️ Fora'}
                   </span>
                 </div>
 
-                {/* Team Matchup - Mandante Primeiro, Visitante Segundo com Escudos */}
-                <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-stone-900 leading-tight">
-                  {/* Mandante (Escudo ANTES do nome) */}
-                  <div className="inline-flex items-center gap-1.5 max-w-full">
+                {/* Team Matchup - Mandante (Foto à Esquerda), Visitante (Foto à Direita) */}
+                <div className="flex items-center justify-between gap-2 pt-1 text-stone-900 leading-tight">
+                  {/* Mandante */}
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
                     <img
                       src={homeLogo}
                       alt={homeTeam}
                       className="w-5 h-5 sm:w-6 sm:h-6 object-contain shrink-0"
                       onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                     />
-                    <span className={`text-base sm:text-lg font-black font-serif line-clamp-2 max-w-[170px] sm:max-w-[210px] leading-tight ${homeIsFlu ? 'text-stone-900 tracking-tight' : 'text-stone-800'}`}>
+                    <span className={`text-sm sm:text-base font-black font-serif truncate ${homeIsFlu ? 'text-[#722F37]' : 'text-stone-800'}`}>
                       {homeTeam}
                     </span>
                   </div>
 
-                  <span className="text-xs sm:text-sm font-bold text-[#722F37] px-0.5 shrink-0">VS</span>
+                  <span className="text-xs font-black text-[#e6b800] bg-stone-900 px-2 py-0.5 rounded shrink-0">VS</span>
 
-                  {/* Visitante (Escudo APÓS o nome) */}
-                  <div className="inline-flex items-center gap-1.5 max-w-full">
-                    <span className={`text-base sm:text-lg font-black font-serif line-clamp-2 max-w-[170px] sm:max-w-[210px] leading-tight ${awayIsFlu ? 'text-stone-900 tracking-tight' : 'text-stone-800'}`}>
+                  {/* Visitante */}
+                  <div className="flex items-center justify-end gap-1.5 flex-1 min-w-0 text-right">
+                    <span className={`text-sm sm:text-base font-black font-serif truncate ${awayIsFlu ? 'text-[#722F37]' : 'text-stone-800'}`}>
                       {awayTeam}
                     </span>
                     <img
@@ -121,7 +120,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           })()}
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => onNotifyMatch(match)}
               className="p-2 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors text-xs font-semibold flex items-center gap-1"
@@ -130,32 +129,12 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               <Send className="w-4 h-4" />
               <span className="hidden sm:inline">Telegram</span>
             </button>
-
-            <button
-              onClick={() => onEdit(match)}
-              className="p-2 text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
-              title="Editar jogo"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => {
-                if (confirm(`Tem certeza que deseja excluir o jogo contra o ${match.opponent}?`)) {
-                  onDelete(match.id);
-                }
-              }}
-              className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-              title="Excluir jogo"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
           </div>
 
         </div>
 
-        {/* Info pills */}
-        <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600 mt-3 pt-2 border-t border-stone-200/60">
+        {/* Info pills - Data e Horário (SEM Local/Estádio) */}
+        <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600 mt-3 pt-2 border-t border-stone-200/60">
           <div className="flex items-center gap-1 font-semibold text-stone-900">
             <Calendar className="w-3.5 h-3.5 text-[#722F37]" />
             <span>{match.date ? match.date.split('-').reverse().join('/') : 'Data a definir'}</span>
@@ -164,11 +143,6 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           <div className="flex items-center gap-1 font-semibold text-stone-900">
             <Clock className="w-3.5 h-3.5 text-[#722F37]" />
             <span>{match.time || '16:00'} hrs</span>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <MapPin className="w-3.5 h-3.5 text-stone-400" />
-            <span className="truncate max-w-[200px]">{match.location || 'Maracanã'}</span>
           </div>
         </div>
 

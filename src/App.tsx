@@ -3,12 +3,10 @@ import { Match, SystemStatus, TelegramSettings, NotificationLog, AutoScheduleSet
 import { Header } from './components/Header';
 import { NextMatchHero } from './components/NextMatchHero';
 import { MatchCard } from './components/MatchCard';
-import { MatchModal } from './components/MatchModal';
-import { TelegramSettingsModal } from './components/TelegramSettingsModal';
-import { TestNotificationModal } from './components/TestNotificationModal';
-import { NotificationLogViewer } from './components/NotificationLogViewer';
-import { VercelExportGuide } from './components/VercelExportGuide';
-import { Filter, Search, Shield, RefreshCw, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
+import { CalendarView } from './components/CalendarView';
+import { SettingsModal } from './components/SettingsModal';
+import { MatchTasksModal } from './components/MatchTasksModal';
+import { Filter, Search, Shield, RefreshCw, AlertCircle, CheckCircle2, Home } from 'lucide-react';
 import {
   safeFetchJson,
   getLocalMatches,
@@ -16,59 +14,27 @@ import {
   getLocalTelegramSettings,
   saveLocalTelegramSettings,
   getLocalLogs,
-  saveLocalLogs,
-  syncCloudData,
-  pushCloudData,
-  syncFixturesFromAPI
+  saveLocalLogs
 } from './utils/syncManager';
-import { INITIAL_MATCHES } from './data/initialData';
-import { mergeMatchesPreservingTasks } from './utils/teamLogos';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'matches' | 'past_matches' | 'logs' | 'export'>('matches');
-  
+  const [activeTab, setActiveTab] = useState<'matches' | 'past_matches' | 'calendar' | 'logs'>('matches');
+
   // Data State
   const [matches, setMatches] = useState<Match[]>([]);
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [telegramSettings, setTelegramSettings] = useState<TelegramSettings | null>(null);
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isTriggeringCron, setIsTriggeringCron] = useState<boolean>(false);
-  const [isSyncingFixtures, setIsSyncingFixtures] = useState<boolean>(false);
-
-  const handleSyncFixtures = async () => {
-    setIsSyncingFixtures(true);
-    try {
-      const res = await syncFixturesFromAPI();
-      if (res.success && res.matches) {
-        setMatches(prevMatches => {
-          const merged = mergeMatchesPreservingTasks(prevMatches, res.matches!);
-          saveLocalMatches(merged);
-          pushCloudData(merged, telegramSettings || getLocalTelegramSettings());
-          return merged;
-        });
-        showToast(res.message || 'Jogos do Fluminense sincronizados com sucesso!', 'success');
-      } else {
-        showToast(res.error || 'Falha ao sincronizar jogos', 'error');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao sincronizar jogos', 'error');
-    } finally {
-      setIsSyncingFixtures(false);
-    }
-  };
 
   // Filters State
   const [selectedComp, setSelectedComp] = useState<string>('Todos');
-  const [selectedVenue, setSelectedVenue] = useState<'Todos' | 'Casa' | 'Fora'>('Todos');
   const [selectedPeriod, setSelectedPeriod] = useState<'Todos' | 'Hoje' | 'Próximos' | 'Passados'>('Todos');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Modals State
-  const [isMatchModalOpen, setIsMatchModalOpen] = useState<boolean>(false);
-  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
-  const [isTelegramSettingsOpen, setIsTelegramSettingsOpen] = useState<boolean>(false);
-  const [isTestModalOpen, setIsTestModalOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [activeTaskMatch, setActiveTaskMatch] = useState<Match | null>(null);
 
   // Toast Feedback State
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -84,70 +50,46 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Sync state to Cloud & Local automatically
-  const syncMatchesState = (newMatches: Match[]) => {
-    setMatches(newMatches);
-    saveLocalMatches(newMatches);
-    pushCloudData(newMatches, telegramSettings || getLocalTelegramSettings());
+  // Sync with Google Sheet
+  const handleSyncSheet = async () => {
+    try {
+      const res = await safeFetchJson<{ matches: Match[]; lastSyncedAt?: string }>('/api/sync/sheet');
+      if (res.ok && res.data && Array.isArray(res.data.matches)) {
+        setMatches(res.data.matches);
+        saveLocalMatches(res.data.matches);
+        return res.data.matches;
+      } else {
+        const fallback = getLocalMatches();
+        setMatches(fallback);
+      }
+    } catch (err) {
+      console.warn('Erro na sincronização da planilha:', err);
+      const fallback = getLocalMatches();
+      setMatches(fallback);
+    }
+    return null;
   };
 
-  // Fetch initial data safely
+  // Fetch initial data on boot
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const matchesRes = await safeFetchJson<Match[]>('/api/matches');
       const statusRes = await safeFetchJson<SystemStatus>('/api/status');
       const configRes = await safeFetchJson<TelegramSettings>('/api/telegram/config');
       const logsRes = await safeFetchJson<NotificationLog[]>('/api/logs');
 
-      let currentMatches: Match[] = [];
-
-      if (matchesRes.ok && Array.isArray(matchesRes.data) && matchesRes.data.length > 0) {
-        currentMatches = matchesRes.data;
-      } else {
-        currentMatches = getLocalMatches();
-      }
-
-      if (!currentMatches || currentMatches.length === 0) {
-        currentMatches = INITIAL_MATCHES;
-      }
-
-      // Check global cloud database so any device or incognito tab sees the same matches & tasks
-      const cloudRes = await syncCloudData();
-      if (cloudRes.success) {
-        if (cloudRes.remoteMatches && cloudRes.remoteMatches.length > 0) {
-          currentMatches = mergeMatchesPreservingTasks(currentMatches, cloudRes.remoteMatches);
-        }
-        if (cloudRes.remoteTelegram && cloudRes.remoteTelegram.botToken) {
-          setTelegramSettings(cloudRes.remoteTelegram);
-          saveLocalTelegramSettings(cloudRes.remoteTelegram);
-        }
-      }
-
-      setMatches(currentMatches);
-      saveLocalMatches(currentMatches);
+      // Sync Google Sheet immediately on load
+      await handleSyncSheet();
 
       if (statusRes.ok && statusRes.data) {
         setStatus(statusRes.data);
-      } else {
-        const localCreds = getLocalTelegramSettings();
-        setStatus({
-          matchesCount: currentMatches.length,
-          todayMatchesCount: currentMatches.filter(m => m.date === new Date().toISOString().split('T')[0]).length,
-          telegramConfigured: Boolean(localCreds.botToken && localCreds.chatId),
-          activeTokenSource: 'database',
-          activeChatIdSource: 'database',
-          hasEnvToken: false,
-          hasEnvChatId: false
-        });
       }
 
-      if (configRes.ok && configRes.data && configRes.data.botToken) {
+      if (configRes.ok && configRes.data) {
         setTelegramSettings(configRes.data);
         saveLocalTelegramSettings(configRes.data);
       } else {
-        const local = getLocalTelegramSettings();
-        if (local.botToken) setTelegramSettings(local);
+        setTelegramSettings(getLocalTelegramSettings());
       }
 
       if (logsRes.ok && Array.isArray(logsRes.data)) {
@@ -156,11 +98,8 @@ export default function App() {
       } else {
         setLogs(getLocalLogs());
       }
-
     } catch (err) {
-      console.warn('Usando armazenamento local persistente:', err);
-      const fallback = getLocalMatches();
-      setMatches(fallback);
+      console.warn('Uso local:', err);
     } finally {
       setIsLoading(false);
     }
@@ -168,82 +107,14 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-    handleSyncFixtures();
 
-    // Auto-poll cloud every 5 seconds so any device opening the link gets real-time sync
+    // Auto-sync with Google Sheet every 30 seconds
     const interval = setInterval(() => {
-      syncCloudData().then((res) => {
-        if (res.success) {
-          if (res.remoteMatches && res.remoteMatches.length > 0) {
-            setMatches(prevMatches => {
-              const merged = mergeMatchesPreservingTasks(prevMatches, res.remoteMatches);
-              saveLocalMatches(merged);
-              return merged;
-            });
-          }
-          if (res.remoteTelegram && res.remoteTelegram.botToken) {
-            setTelegramSettings(res.remoteTelegram);
-            saveLocalTelegramSettings(res.remoteTelegram);
-          }
-        }
-      }).catch(() => {});
-    }, 5000);
+      handleSyncSheet();
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);
-
-  // Handlers for Match CRUD
-  const handleSaveMatch = async (matchData: Partial<Match>) => {
-    try {
-      if (editingMatch) {
-        const res = await safeFetchJson<Match>(`/api/matches/${editingMatch.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(matchData)
-        });
-
-        const updatedMatch: Match = res.ok && res.data ? res.data : { ...editingMatch, ...matchData } as Match;
-        const newMatches = matches.map(m => m.id === updatedMatch.id ? updatedMatch : m);
-        syncMatchesState(newMatches);
-        showToast('Jogo atualizado com sucesso! 🇭🇺');
-      } else {
-        const createdMatch: Match = {
-          id: `match-${Date.now()}`,
-          opponent: matchData.opponent || 'Adversário',
-          date: matchData.date || new Date().toISOString().split('T')[0],
-          time: matchData.time || '16:00',
-          competition: matchData.competition || 'Brasileirão',
-          location: matchData.location || 'Maracanã, Rio de Janeiro',
-          isHome: matchData.isHome ?? true,
-          notes: matchData.notes || '',
-          tasks: [] // Inicia vazia sem sugestões
-        };
-
-        await safeFetchJson<Match>('/api/matches', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(createdMatch)
-        });
-
-        const newMatches = [createdMatch, ...matches];
-        syncMatchesState(newMatches);
-        showToast('Novo jogo cadastrado e sincronizado! ⚽');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao salvar jogo', 'error');
-    }
-  };
-
-  const handleDeleteMatch = async (id: string) => {
-    try {
-      await safeFetchJson(`/api/matches/${id}`, { method: 'DELETE' });
-      const newMatches = matches.filter(m => m.id !== id);
-      syncMatchesState(newMatches);
-      showToast('Jogo removido com sucesso');
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao excluir jogo', 'error');
-    }
-  };
 
   // Handlers for Tasks
   const handleToggleTask = async (matchId: string, taskId: string, completed: boolean) => {
@@ -257,7 +128,15 @@ export default function App() {
       return m;
     });
 
-    syncMatchesState(updated);
+    setMatches(updated);
+    saveLocalMatches(updated);
+
+    if (activeTaskMatch && activeTaskMatch.id === matchId) {
+      setActiveTaskMatch({
+        ...activeTaskMatch,
+        tasks: (activeTaskMatch.tasks || []).map(t => t.id === taskId ? { ...t, completed } : t)
+      });
+    }
 
     await safeFetchJson(`/api/matches/${matchId}/tasks/${taskId}`, {
       method: 'PATCH',
@@ -280,8 +159,17 @@ export default function App() {
       return m;
     });
 
-    syncMatchesState(updated);
-    showToast('Tarefa salva e salva na nuvem! ☁️');
+    setMatches(updated);
+    saveLocalMatches(updated);
+
+    if (activeTaskMatch && activeTaskMatch.id === matchId) {
+      setActiveTaskMatch({
+        ...activeTaskMatch,
+        tasks: [...(activeTaskMatch.tasks || []), newTask]
+      });
+    }
+
+    showToast('Tarefa cadastrada para este jogo! 📋');
 
     await safeFetchJson(`/api/matches/${matchId}/tasks`, {
       method: 'POST',
@@ -298,50 +186,22 @@ export default function App() {
       return m;
     });
 
-    syncMatchesState(updated);
+    setMatches(updated);
+    saveLocalMatches(updated);
+
+    if (activeTaskMatch && activeTaskMatch.id === matchId) {
+      setActiveTaskMatch({
+        ...activeTaskMatch,
+        tasks: (activeTaskMatch.tasks || []).filter(t => t.id !== taskId)
+      });
+    }
 
     await safeFetchJson(`/api/matches/${matchId}/tasks/${taskId}`, {
       method: 'DELETE'
     });
   };
 
-  // Client-side auto-schedule checker (runs every 30s)
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      if (!telegramSettings?.autoSchedule?.enabled) return;
-      const { daysOfWeek, notificationTimes, onlyOnMatchDays } = telegramSettings.autoSchedule;
-
-      const now = new Date();
-      const currentDay = now.getDay(); // 0=Dom, 1=Seg...
-      if (!daysOfWeek || !daysOfWeek.includes(currentDay)) return;
-
-      const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      if (!notificationTimes || !notificationTimes.includes(currentTimeStr)) return;
-
-      // Check if already triggered this minute to avoid duplicates
-      const triggerKey = `auto_sent_${now.toISOString().split('T')[0]}_${currentTimeStr}`;
-      if (sessionStorage.getItem(triggerKey)) return;
-      sessionStorage.setItem(triggerKey, 'true');
-
-      // Check match requirement if enabled
-      const todayStr = now.toISOString().split('T')[0];
-      const hasTodayMatch = matches.some(m => m.date === todayStr);
-
-      if (onlyOnMatchDays && !hasTodayMatch) return;
-
-      // Fire auto reminder
-      try {
-        await safeFetchJson('/api/cron/reminders');
-        showToast(`Lembrete automático enviado no Telegram (${currentTimeStr})! 🇭🇺`, 'info');
-      } catch (err) {
-        console.warn('Erro na verificação do envio automático:', err);
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [telegramSettings, matches]);
-
-  // Telegram Config & Dispatches
+  // Telegram Config & Actions
   const handleSaveTelegramSettings = async (botToken: string, chatId: string, autoSchedule?: AutoScheduleSettings) => {
     const newSettings: TelegramSettings = {
       botToken,
@@ -351,7 +211,6 @@ export default function App() {
     };
     saveLocalTelegramSettings(newSettings);
     setTelegramSettings(newSettings);
-    pushCloudData(matches, newSettings);
 
     const res = await safeFetchJson('/api/telegram/config', {
       method: 'POST',
@@ -360,127 +219,63 @@ export default function App() {
     });
 
     if (res.ok) {
-      showToast('Configurações e agendamento salvos na nuvem com sucesso!');
+      showToast('Configurações salvas no servidor com sucesso!');
     } else {
-      showToast('Configurações e agendamento salvos localmente e na nuvem!');
+      showToast('Configurações salvas localmente!');
     }
 
     setStatus(prev => prev ? {
       ...prev,
       telegramConfigured: Boolean(botToken && chatId)
-    } : {
-      matchesCount: matches.length,
-      todayMatchesCount: matches.filter(m => m.date === new Date().toISOString().split('T')[0]).length,
-      telegramConfigured: Boolean(botToken && chatId),
-      activeTokenSource: 'database',
-      activeChatIdSource: 'database',
-      hasEnvToken: false,
-      hasEnvChatId: false
-    });
+    } : null);
   };
 
-  const handleSendTestNotification = async (customMessage?: string, matchId?: string) => {
-    const token = telegramSettings?.botToken || getLocalTelegramSettings().botToken;
-    const chatId = telegramSettings?.chatId || getLocalTelegramSettings().chatId;
+  const handleTestConnection = async () => {
+    const res = await safeFetchJson<{ success: boolean; message: string }>('/api/telegram/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
 
-    if (!token || !chatId) {
-      throw new Error('Bot Token ou Chat ID do Telegram não foram preenchidos. Clique em "Configurar" e insira suas credenciais do Telegram.');
+    if (!res.ok) {
+      throw new Error(res.error || 'Falha ao enviar mensagem de teste');
     }
+    showToast('Mensagem enviada com sucesso no Telegram! 🇭🇺');
+  };
 
-    // Try server API first
+  const handleTriggerCronNow = async () => {
+    const res = await safeFetchJson<{ success: boolean; message: string }>('/api/cron/reminders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+
+    if (!res.ok) {
+      throw new Error(res.error || 'Erro ao disparar lembrete');
+    }
+    showToast('Lembrete do próximo jogo enviado no Telegram! 🇭🇺');
+    // Refresh logs
+    const logsRes = await safeFetchJson<NotificationLog[]>('/api/logs');
+    if (logsRes.ok && Array.isArray(logsRes.data)) {
+      setLogs(logsRes.data);
+    }
+  };
+
+  const handleTestMatchTelegram = async (match: Match) => {
     try {
-      const res = await safeFetchJson<{ success: boolean; message: string }>('/api/telegram/test', {
+      const res = await safeFetchJson<{ success: boolean }>('/api/telegram/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customMessage,
-          matchId,
-          customToken: token,
-          customChatId: chatId
-        })
+        body: JSON.stringify({ matchId: match.id })
       });
 
       if (res.ok) {
-        showToast('Mensagem enviada no Telegram com sucesso! 🇭🇺');
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Tentando envio direto via Telegram API...', e);
-    }
-
-    // Fallback: Direct Telegram Bot API call from browser
-    let textToSend = customMessage;
-    if (!textToSend && matchId) {
-      const m = (matches || []).find(match => match.id === matchId);
-      if (m) {
-        const mTasks = m.tasks || [];
-        const pending = mTasks.filter(t => !t.completed);
-        textToSend = `🇭🇺 <b>HOJE TEM FLUMINENSE!</b> ⚽\n\n` +
-          `🛡️ <b>Fluminense vs ${m.opponent}</b>\n` +
-          `🏆 <b>Competição:</b> ${m.competition}\n` +
-          `⏰ <b>Horário:</b> ${m.time}\n` +
-          `📍 <b>Local:</b> ${m.location}\n\n` +
-          `📋 <b>CHECKLIST DE TAREFAS (${mTasks.filter(t => t.completed).length}/${mTasks.length}):</b>\n` +
-          (mTasks.length > 0
-            ? mTasks.map(t => `${t.completed ? '✅' : '⏳'} ${t.text}`).join('\n')
-            : '<i>Nenhuma tarefa cadastrada para este jogo.</i>') +
-          (pending.length > 0 ? `\n\n⚠️ <b>Atenção:</b> Você possui ${pending.length} tarefa(s) pendente(s)!` : '') +
-          `\n\n🔥 <b>VAMOS, TRICOLOR! VENCER OU VENCER!</b> 🇭🇺`;
-      }
-    }
-
-    if (!textToSend) {
-      textToSend = `🇭🇺 <b>TESTE DE INTEGRAÇÃO - FLUREMIND</b> 🇭🇺\n\n` +
-        `Olá! Seu Bot do Telegram foi configurado com sucesso para enviar lembretes dos jogos do <b>Fluminense FC</b>! ⚽\n\n` +
-        `⏰ <b>Agendamento Automático:</b> Ativo!\n` +
-        `🔥 <b>Saudações Tricolores!</b> 🛡️`;
-    }
-
-    const telegramUrl = `https://api.telegram.org/bot${token}/sendMessage`;
-    const teleRes = await fetch(telegramUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: textToSend,
-        parse_mode: 'HTML'
-      })
-    });
-
-    const teleData = await teleRes.json();
-    if (!teleRes.ok || !teleData.ok) {
-      const desc = teleData.description || 'Falha na API do Telegram';
-      if (desc.includes('chat not found')) {
-        throw new Error('Chat do Telegram não encontrado! Abra o seu bot no Telegram e clique em "COMEÇAR" (/start) primeiro para autorizá-lo.');
-      }
-      if (desc.includes('Unauthorized') || desc.includes('Not Found')) {
-        throw new Error('Token do Bot inválido! Verifique a chave gerada com o @BotFather no Telegram.');
-      }
-      throw new Error(`Telegram: ${desc}`);
-    }
-
-    showToast('Mensagem enviada no Telegram com sucesso! 🇭🇺');
-    return teleData;
-  };
-
-  const handleTriggerTodayCron = async () => {
-    try {
-      setIsTriggeringCron(true);
-      const res = await safeFetchJson<{ matchesTodayCount: number; message?: string }>('/api/cron/reminders');
-
-      if (!res.ok) {
-        throw new Error(res.error || 'Falha ao rodar Cron no servidor. Se estiver na Vercel, use a Vercel Cron.');
-      }
-
-      if (res.data && res.data.matchesTodayCount === 0) {
-        showToast('Nenhum jogo do Fluminense agendado para hoje', 'info');
+        showToast(`Lembrete disparado no Telegram para ${match.opponent}! 🇭🇺`);
       } else {
-        showToast(`Lembrete disparado para o jogo de hoje! 🇭🇺`, 'success');
+        showToast(res.error || 'Erro ao notificar no Telegram', 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Erro ao rodar Cron', 'error');
-    } finally {
-      setIsTriggeringCron(false);
+      showToast(err.message || 'Falha ao comunicar com Telegram', 'error');
     }
   };
 
@@ -488,53 +283,50 @@ export default function App() {
     await safeFetchJson('/api/logs', { method: 'DELETE' });
     setLogs([]);
     saveLocalLogs([]);
-    showToast('Histórico limpo');
+    showToast('Histórico de logs limpo');
   };
 
-  // Filter and sort matches by date
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Filter and sort matches by date (Brasília Time Zone)
+  const nowBR = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const todayStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth() + 1).padStart(2, '0')}-${String(nowBR.getDate()).padStart(2, '0')}`;
+
   const safeMatchesList = Array.isArray(matches) ? matches : [];
 
-  // Upcoming matches (date >= today) for main screen
-  const upcomingMatches = [...safeMatchesList]
-    .filter(m => m && m.date && m.date >= todayStr)
+  // Main screen constraint: ONLY HOME GAMES (isHome === true) appear on main screen
+  const upcomingHomeMatches = [...safeMatchesList]
+    .filter(m => m && m.isHome && m.date && m.date >= todayStr)
     .sort((a, b) => `${a.date || ''}T${a.time || '00:00'}`.localeCompare(`${b.date || ''}T${b.time || '00:00'}`));
 
-  // Past matches (date < today)
-  const pastMatches = [...safeMatchesList]
-    .filter(m => m && m.date && m.date < todayStr)
+  // Past home matches for main screen / past tab
+  const pastHomeMatches = [...safeMatchesList]
+    .filter(m => m && m.isHome && m.date && m.date < todayStr)
     .sort((a, b) => `${b.date || ''}T${b.time || '00:00'}`.localeCompare(`${a.date || ''}T${a.time || '00:00'}`));
 
-  const nextMatch = upcomingMatches[0] || null;
+  const nextMatch = upcomingHomeMatches[0] || null;
 
   // Active list based on selected tab
-  const currentTabMatches = activeTab === 'past_matches' ? pastMatches : upcomingMatches;
+  const currentTabMatches = activeTab === 'past_matches' ? pastHomeMatches : upcomingHomeMatches;
 
-  const filteredMatches = currentTabMatches
-    .filter(m => {
-      if (!m) return false;
+  const filteredMatches = currentTabMatches.filter(m => {
+    if (!m) return false;
 
-      // Venue filter
-      if (selectedVenue === 'Casa' && !m.isHome) return false;
-      if (selectedVenue === 'Fora' && m.isHome) return false;
+    // Competition filter
+    if (selectedComp !== 'Todos' && m.competition !== selectedComp) return false;
 
-      // Competition filter
-      if (selectedComp !== 'Todos' && m.competition !== selectedComp) return false;
+    // Period filter
+    if (selectedPeriod === 'Hoje' && m.date !== todayStr) return false;
+    if (selectedPeriod === 'Próximos' && m.date && m.date < todayStr) return false;
+    if (selectedPeriod === 'Passados' && (!m.date || m.date >= todayStr)) return false;
 
-      // Period filter
-      if (selectedPeriod === 'Hoje' && m.date !== todayStr) return false;
-      if (selectedPeriod === 'Próximos' && m.date && m.date < todayStr) return false;
-      if (selectedPeriod === 'Passados' && (!m.date || m.date >= todayStr)) return false;
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchText = `${m.opponent || ''} ${m.competition || ''} ${m.notes || ''}`.toLowerCase();
+      if (!matchText.includes(q)) return false;
+    }
 
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchText = `${m.opponent || ''} ${m.competition || ''} ${m.location || ''} ${m.notes || ''}`.toLowerCase();
-        if (!matchText.includes(q)) return false;
-      }
-
-      return true;
-    });
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900 font-sans pb-16">
@@ -544,16 +336,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         status={status}
-        onOpenTelegramSettings={() => setIsTelegramSettingsOpen(true)}
-        onOpenTestNotification={() => setIsTestModalOpen(true)}
-        onOpenAddMatch={() => {
-          setEditingMatch(null);
-          setIsMatchModalOpen(true);
-        }}
-        onTriggerCronToday={handleTriggerTodayCron}
-        isTriggeringCron={isTriggeringCron}
-        onSyncFixtures={handleSyncFixtures}
-        isSyncingFixtures={isSyncingFixtures}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       {/* Global Toast Feedback */}
@@ -572,65 +355,47 @@ export default function App() {
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         
+        {/* TAB 1: MAIN SCREEN (ONLY HOME MATCHES) */}
         {activeTab === 'matches' && (
           <>
-            {/* Hero Banner for Next Match */}
-            {nextMatch && (
-              <NextMatchHero
-                match={nextMatch}
-                onOpenChecklist={(m) => {
-                  setEditingMatch(m);
-                  setIsMatchModalOpen(true);
-                }}
-                onTestTelegramMatch={(m) => {
-                  handleSendTestNotification(undefined, m.id)
-                    .then(() => showToast(`Notificação enviada para o jogo contra o ${m.opponent}! 🇭🇺`))
-                    .catch((err) => showToast(err.message, 'error'));
-                }}
-              />
+            {/* Hero Banner for Next Home Match */}
+            {nextMatch ? (
+              <NextMatchHero match={nextMatch} />
+            ) : (
+              <div className="bg-gradient-to-r from-stone-900 to-stone-800 text-white rounded-2xl p-6 shadow-xl border border-stone-700 text-center">
+                <Shield className="w-12 h-12 text-[#e6b800] mx-auto mb-2 opacity-80" />
+                <h3 className="text-lg font-bold">Nenhum próximo jogo do Fluminense em casa</h3>
+                <p className="text-xs text-stone-400 mt-1">
+                  Apenas os jogos em que o Fluminense é mandante aparecem na tela principal de tarefas.
+                </p>
+              </div>
             )}
 
             {/* Filter and Search Bar */}
-            <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
               
-              {/* Competition & Venue Filters */}
+              {/* Competition Filters */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
                 <span className="text-xs font-bold text-stone-400 flex items-center gap-1 mr-1">
                   <Filter className="w-3.5 h-3.5" /> Filtrar:
                 </span>
 
                 <button
-                  onClick={() => setSelectedVenue('Todos')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    selectedVenue === 'Todos' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  onClick={() => setSelectedComp('Todos')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedComp === 'Todos' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                   }`}
                 >
-                  Todos os Jogos
-                </button>
-                <button
-                  onClick={() => setSelectedVenue('Casa')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    selectedVenue === 'Casa' ? 'bg-[#006633] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  🏠 Casa
-                </button>
-                <button
-                  onClick={() => setSelectedVenue('Fora')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    selectedVenue === 'Fora' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  ✈️ Fora
+                  Todas Competições
                 </button>
 
                 {['Brasileirão', 'Copa Libertadores', 'Copa do Brasil'].map(comp => (
                   <button
                     key={comp}
                     onClick={() => setSelectedComp(selectedComp === comp ? 'Todos' : comp)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                       selectedComp === comp
-                        ? 'bg-amber-600 text-white shadow-sm'
+                        ? 'bg-amber-600 text-white shadow-xs'
                         : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                     }`}
                   >
@@ -670,24 +435,21 @@ export default function App() {
             {isLoading ? (
               <div className="py-12 text-center text-stone-500 font-medium text-xs flex items-center justify-center gap-2">
                 <RefreshCw className="w-4 h-4 animate-spin text-[#722F37]" />
-                <span>Carregando jogos e tarefas do Fluminense...</span>
+                <span>Carregando jogos da planilha do Google Drive...</span>
               </div>
             ) : filteredMatches.length === 0 ? (
               <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-3">
                 <Shield className="w-12 h-12 text-stone-300 mx-auto" />
-                <h3 className="text-base font-bold text-stone-800">Nenhum jogo cadastrado nesse filtro</h3>
+                <h3 className="text-base font-bold text-stone-800">Nenhum próximo jogo em casa encontrado</h3>
                 <p className="text-xs text-stone-500 max-w-md mx-auto">
-                  Cadastre os jogos manualmente com as datas, horários e suas tarefas personalizadas. Tudo fica salvo automaticamente para todos os aparelhos!
+                  Apenas os jogos como mandante aparecem nesta tela.
                 </p>
                 <button
-                  onClick={() => {
-                    setEditingMatch(null);
-                    setIsMatchModalOpen(true);
-                  }}
-                  className="px-5 py-2.5 bg-[#722F37] hover:bg-[#5a0c1a] text-white text-xs font-bold rounded-xl shadow-lg transition-all inline-flex items-center gap-1.5"
+                  onClick={handleSyncSheet}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-lg transition-all inline-flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Cadastrar Novo Jogo Manualmente</span>
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Sincronizar Planilha Agora</span>
                 </button>
               </div>
             ) : (
@@ -696,19 +458,11 @@ export default function App() {
                   <MatchCard
                     key={`${match.id}-${idx}`}
                     match={match}
-                    onEdit={(m) => {
-                      setEditingMatch(m);
-                      setIsMatchModalOpen(true);
-                    }}
-                    onDelete={handleDeleteMatch}
+                    onOpenTasks={(m) => setActiveTaskMatch(m)}
                     onToggleTask={handleToggleTask}
                     onAddTask={handleAddTask}
                     onDeleteTask={handleDeleteTask}
-                    onNotifyMatch={(m) => {
-                      handleSendTestNotification(undefined, m.id)
-                        .then(() => showToast(`Lembrete disparado no Telegram para ${m.opponent}! 🇭🇺`))
-                        .catch((err) => showToast(err.message, 'error'));
-                    }}
+                    onNotifyMatch={handleTestMatchTelegram}
                   />
                 ))}
               </div>
@@ -716,71 +470,25 @@ export default function App() {
           </>
         )}
 
-        {/* Tab 1.5: Past Matches */}
+        {/* TAB 2: PAST HOME MATCHES */}
         {activeTab === 'past_matches' && (
           <>
             <div className="bg-gradient-to-r from-stone-800 to-stone-900 text-white rounded-2xl p-5 shadow-lg border border-stone-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold font-serif flex items-center gap-2">
-                  <span>🏁 Jogos Anteriores do Fluminense</span>
+                  <span>🏁 Jogos Anteriores do Fluminense em Casa</span>
                 </h2>
                 <p className="text-xs text-stone-300 mt-1">
-                  Histórico de partidas passadas e tarefas salvas para cada confronto específico.
+                  Histórico de partidas anteriores em que o Fluminense foi mandante.
                 </p>
               </div>
               <div className="text-xs px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 font-medium">
-                Total de jogos anteriores: <strong>{pastMatches.length}</strong>
+                Total: <strong>{pastHomeMatches.length}</strong>
               </div>
             </div>
 
-            {/* Filter and Search Bar */}
-            <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-              
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-                <span className="text-xs font-bold text-stone-400 flex items-center gap-1 mr-1">
-                  <Filter className="w-3.5 h-3.5" /> Filtrar:
-                </span>
-
-                <button
-                  onClick={() => setSelectedVenue('Todos')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    selectedVenue === 'Todos' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  Todos
-                </button>
-                <button
-                  onClick={() => setSelectedVenue('Casa')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    selectedVenue === 'Casa' ? 'bg-[#006633] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  🏠 Casa
-                </button>
-                <button
-                  onClick={() => setSelectedVenue('Fora')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    selectedVenue === 'Fora' ? 'bg-[#722F37] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  ✈️ Fora
-                </button>
-
-                {['Brasileirão', 'Copa Libertadores', 'Copa do Brasil'].map(comp => (
-                  <button
-                    key={comp}
-                    onClick={() => setSelectedComp(selectedComp === comp ? 'Todos' : comp)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                      selectedComp === comp
-                        ? 'bg-amber-600 text-white shadow-sm'
-                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                    }`}
-                  >
-                    {comp}
-                  </button>
-                ))}
-              </div>
-
+            {/* Filter Bar */}
+            <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="relative flex-1 sm:w-56">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-stone-400" />
                 <input
@@ -791,17 +499,13 @@ export default function App() {
                   className="w-full text-xs pl-9 pr-3 py-2 rounded-xl bg-stone-100 border border-stone-200 focus:outline-none focus:ring-2 focus:ring-[#722F37]"
                 />
               </div>
-
             </div>
 
             {/* Past Matches List */}
             {filteredMatches.length === 0 ? (
               <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-2">
                 <Shield className="w-10 h-10 text-stone-300 mx-auto" />
-                <h3 className="text-sm font-bold text-stone-800">Nenhum jogo anterior encontrado</h3>
-                <p className="text-xs text-stone-500">
-                  Jogos com data anterior à de hoje aparecerão automaticamente aqui.
-                </p>
+                <h3 className="text-sm font-bold text-stone-800">Nenhum jogo anterior em casa encontrado</h3>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -809,19 +513,11 @@ export default function App() {
                   <MatchCard
                     key={`${match.id}-${idx}`}
                     match={match}
-                    onEdit={(m) => {
-                      setEditingMatch(m);
-                      setIsMatchModalOpen(true);
-                    }}
-                    onDelete={handleDeleteMatch}
+                    onOpenTasks={(m) => setActiveTaskMatch(m)}
                     onToggleTask={handleToggleTask}
                     onAddTask={handleAddTask}
                     onDeleteTask={handleDeleteTask}
-                    onNotifyMatch={(m) => {
-                      handleSendTestNotification(undefined, m.id)
-                        .then(() => showToast(`Lembrete disparado no Telegram para ${m.opponent}! 🇭🇺`))
-                        .catch((err) => showToast(err.message, 'error'));
-                    }}
+                    onNotifyMatch={handleTestMatchTelegram}
                   />
                 ))}
               </div>
@@ -829,49 +525,38 @@ export default function App() {
           </>
         )}
 
-        {/* Tab 2: Logs */}
-        {activeTab === 'logs' && (
-          <NotificationLogViewer
-            logs={logs}
-            onClearLogs={handleClearLogs}
+        {/* TAB 3: ALL MATCHES CALENDAR VIEW */}
+        {activeTab === 'calendar' && (
+          <CalendarView
+            matches={safeMatchesList}
+            onOpenTasks={(m) => setActiveTaskMatch(m)}
+            onNotifyMatch={handleTestMatchTelegram}
           />
-        )}
-
-        {/* Tab 3: Export Guide */}
-        {activeTab === 'export' && (
-          <VercelExportGuide />
         )}
 
       </main>
 
-      {/* Modals */}
-      <MatchModal
-        isOpen={isMatchModalOpen}
-        onClose={() => {
-          setIsMatchModalOpen(false);
-          setEditingMatch(null);
-        }}
-        onSave={handleSaveMatch}
-        initialData={editingMatch}
-      />
-
-      <TelegramSettingsModal
-        isOpen={isTelegramSettingsOpen}
-        onClose={() => setIsTelegramSettingsOpen(false)}
+      {/* Unified Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
         settings={telegramSettings}
+        status={status}
+        logs={logs}
         onSaveSettings={handleSaveTelegramSettings}
-        onTestConnection={async () => {
-          await handleSendTestNotification();
-        }}
+        onTestConnection={handleTestConnection}
+        onTriggerCronNow={handleTriggerCronNow}
+        onSyncSheetNow={handleSyncSheet}
+        onClearLogs={handleClearLogs}
       />
 
-      <TestNotificationModal
-        isOpen={isTestModalOpen}
-        onClose={() => setIsTestModalOpen(false)}
-        matches={matches}
-        onSendCustomNotification={async (text, matchId) => {
-          return await handleSendTestNotification(text, matchId);
-        }}
+      {/* Match Checklist Modal ("Ver Tarefas") */}
+      <MatchTasksModal
+        match={activeTaskMatch}
+        onClose={() => setActiveTaskMatch(null)}
+        onToggleTask={handleToggleTask}
+        onAddTask={handleAddTask}
+        onDeleteTask={handleDeleteTask}
       />
 
     </div>

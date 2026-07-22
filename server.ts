@@ -2,8 +2,6 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { INITIAL_MATCHES } from './src/data/initialData';
-import { mergeMatchesPreservingTasks, formatOpponentName } from './src/utils/teamLogos';
 import { Match, TelegramSettings, NotificationLog } from './src/types';
 
 const app = express();
@@ -19,10 +17,12 @@ interface DbSchema {
   matches: Match[];
   telegramSettings: TelegramSettings;
   logs: NotificationLog[];
+  lastSyncedAt?: string;
 }
 
 const DEFAULT_BOT_TOKEN = '8951861356:AAHo0fczfX2TORYkuNQT8VMcN5aRdSuhLsc';
 const DEFAULT_CHAT_ID = '640896648';
+const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1BgoimzpqdL5UXpCw12vz4BiSuRYxIlGr/export?format=csv';
 
 function ensureDb(): DbSchema {
   if (!fs.existsSync(DATA_DIR)) {
@@ -31,11 +31,17 @@ function ensureDb(): DbSchema {
 
   if (!fs.existsSync(DB_FILE)) {
     const initialDb: DbSchema = {
-      matches: INITIAL_MATCHES,
+      matches: [],
       telegramSettings: {
         botToken: process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN,
         chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
-        enabled: true
+        enabled: true,
+        autoSchedule: {
+          enabled: true,
+          daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+          notificationTimes: ['08:00', '12:00', '18:00'],
+          onlyOnMatchDays: false
+        }
       },
       logs: []
     };
@@ -46,23 +52,27 @@ function ensureDb(): DbSchema {
   try {
     const content = fs.readFileSync(DB_FILE, 'utf-8');
     const data = JSON.parse(content) as DbSchema;
-    if (!data.matches || data.matches.length === 0) {
-      data.matches = INITIAL_MATCHES;
-    }
+    if (!data.matches) data.matches = [];
     if (!data.telegramSettings || !data.telegramSettings.botToken) {
       data.telegramSettings = {
         botToken: process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN,
         chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
-        enabled: true
+        enabled: true,
+        autoSchedule: {
+          enabled: true,
+          daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+          notificationTimes: ['08:00', '12:00', '18:00'],
+          onlyOnMatchDays: false
+        }
       };
       saveDb(data);
     }
     if (!data.logs) data.logs = [];
     return data;
   } catch (err) {
-    console.error('Error reading db.json, falling back to initial schema:', err);
+    console.error('Error reading db.json, falling back:', err);
     return {
-      matches: INITIAL_MATCHES,
+      matches: [],
       telegramSettings: {
         botToken: process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN,
         chatId: process.env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID,
@@ -84,22 +94,19 @@ function saveDb(data: DbSchema) {
   }
 }
 
-// Get effective Telegram credentials (env var priority, fallback to db settings)
 function getTelegramCreds(db: DbSchema) {
   const token = process.env.TELEGRAM_BOT_TOKEN || db.telegramSettings?.botToken || DEFAULT_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID || db.telegramSettings?.chatId || DEFAULT_CHAT_ID;
   return { token, chatId };
 }
 
-// Helper to send Telegram message safely with HTML formatting & plain text fallback
 async function sendTelegramNotification(token: string, chatId: string, text: string) {
   if (!token || !chatId) {
-    throw new Error('TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não estão configurados. Por favor, acesse as configurações do Telegram.');
+    throw new Error('TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não estão configurados.');
   }
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
-  // First try: Send with HTML parse mode
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -119,7 +126,6 @@ async function sendTelegramNotification(token: string, chatId: string, text: str
     console.warn('HTML parse failed, attempting plain text fallback:', e);
   }
 
-  // Second try: Fallback plain text without markup tags
   const plainText = text.replace(/<[^>]*>/g, '');
   const response = await fetch(url, {
     method: 'POST',
@@ -139,7 +145,6 @@ async function sendTelegramNotification(token: string, chatId: string, text: str
   return resData;
 }
 
-// Helper to escape HTML characters in raw text
 function escapeHtml(str: string): string {
   if (!str) return '';
   return str
@@ -148,21 +153,48 @@ function escapeHtml(str: string): string {
     .replace(/>/g, '&gt;');
 }
 
-// Helper to format match reminder message for Telegram (HTML)
+// Format smart notification message for Telegram (calculates days until next match)
 function formatMatchTelegramMessage(match: Match): string {
-  const homeAway = match.isHome ? '🏠 Casa (Maracanã/Rio)' : '✈️ Fora de Casa';
-  const pendingTasks = match.tasks.filter(t => !t.completed);
-  const doneTasks = match.tasks.filter(t => t.completed);
+  const nowBR = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const todayStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth() + 1).padStart(2, '0')}-${String(nowBR.getDate()).padStart(2, '0')}`;
 
-  let msg = `🇭🇺 <b>HOJE TEM FLUMINENSE!</b> ⚽\n\n`;
-  msg += `🛡️ <b>Fluminense vs ${escapeHtml(match.opponent)}</b>\n`;
+  const dateParts = (match.date || '').split('-');
+  const year = parseInt(dateParts[0], 10);
+  const month = parseInt(dateParts[1], 10);
+  const day = parseInt(dateParts[2], 10);
+
+  const formattedDate = (day && month && year) ? `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}` : match.date;
+
+  const matchDateObj = new Date(year, month - 1, day);
+  const todayDateObj = new Date(nowBR.getFullYear(), nowBR.getMonth(), nowBR.getDate());
+  const diffTime = matchDateObj.getTime() - todayDateObj.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+
+  let headerTitle = '';
+  if (diffDays === 0) {
+    headerTitle = `🚨 <b>HOJE TEM FLUMINENSE!</b> ⚽`;
+  } else if (diffDays === 1) {
+    headerTitle = `⏳ <b>AMANHÃ TEM FLUMINENSE!</b> ⚽`;
+  } else if (diffDays > 1) {
+    headerTitle = `📅 <b>PRÓXIMO JOGO DO FLUMINENSE (em ${diffDays} dias - ${formattedDate})</b> ⚽`;
+  } else {
+    headerTitle = `🏁 <b>PARTIDA DO FLUMINENSE (${formattedDate})</b> ⚽`;
+  }
+
+  const homeTeam = match.homeTeam || (match.isHome ? 'Fluminense' : match.opponent);
+  const awayTeam = match.awayTeam || (match.isHome ? match.opponent : 'Fluminense');
+
+  let msg = `🇭🇺 ${headerTitle}\n\n`;
+  msg += `🛡️ <b>${escapeHtml(homeTeam)} vs ${escapeHtml(awayTeam)}</b>\n`;
   msg += `🏆 <b>Competição:</b> ${escapeHtml(match.competition)}\n`;
-  msg += `⏰ <b>Horário:</b> ${escapeHtml(match.time)}\n`;
-  msg += `📍 <b>Local:</b> ${escapeHtml(match.location)} (${homeAway})\n\n`;
+  msg += `⏰ <b>Horário:</b> ${escapeHtml(match.time)} hrs (${formattedDate})\n\n`;
 
   if (match.notes) {
     msg += `📝 <b>Observação:</b> ${escapeHtml(match.notes)}\n\n`;
   }
+
+  const pendingTasks = match.tasks.filter(t => !t.completed);
+  const doneTasks = match.tasks.filter(t => t.completed);
 
   msg += `📋 <b>CHECKLIST DE TAREFAS (${doneTasks.length}/${match.tasks.length} concluídas):</b>\n`;
 
@@ -186,40 +218,274 @@ function formatMatchTelegramMessage(match: Match): string {
   return msg;
 }
 
+function parseCsvLine(text: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim().replace(/^"|"$/g, ''));
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim().replace(/^"|"$/g, ''));
+  return result;
+}
+
+// Parse CSV from Google Sheet
+function parseGoogleSheetCSV(text: string): Match[] {
+  const lines = text.split(/\r?\n/);
+  const result: Match[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const cols = parseCsvLine(line);
+    const ordStr = cols[0] ? cols[0].trim() : '';
+    const ordNum = Number(ordStr);
+    if (!ordStr || isNaN(ordNum)) continue;
+
+    const rawData = cols[1] ? cols[1].trim() : '';
+    const rawHora = cols[2] ? cols[2].trim() : '';
+    const comp = cols[3] ? cols[3].trim() : '';
+    const mandante = cols[4] ? cols[4].trim() : '';
+    const visitante = cols[5] ? cols[5].trim() : '';
+    const fotoMandante = cols[6] ? cols[6].trim() : '';
+    const fotoVisitante = cols[7] ? cols[7].trim() : '';
+
+    if (!mandante && !visitante) continue;
+
+    // Date parse: M/D/YYYY or D/M/YYYY or YYYY-MM-DD
+    let dateStr = '';
+    if (rawData.includes('/')) {
+      const parts = rawData.split('/');
+      if (parts.length === 3) {
+        let p1 = parseInt(parts[0], 10);
+        let p2 = parseInt(parts[1], 10);
+        let year = parseInt(parts[2], 10);
+        let month = p1;
+        let day = p2;
+        if (p1 > 12) { day = p1; month = p2; }
+        dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    } else {
+      dateStr = rawData;
+    }
+
+    // Time parse: 4:30:00 PM or 16:30:00 -> 16:30
+    let timeStr = rawHora;
+    if (rawHora.toLowerCase().includes('pm') || rawHora.toLowerCase().includes('am')) {
+      const isPM = rawHora.toLowerCase().includes('pm');
+      const clean = rawHora.replace(/(am|pm)/i, '').trim();
+      const tParts = clean.split(':');
+      let h = parseInt(tParts[0], 10);
+      const m = tParts[1] ? tParts[1].padStart(2, '0') : '00';
+      if (isPM && h < 12) h += 12;
+      if (!isPM && h === 12) h = 0;
+      timeStr = `${String(h).padStart(2, '0')}:${m}`;
+    } else {
+      const tParts = rawHora.split(':');
+      if (tParts.length >= 2) {
+        timeStr = `${tParts[0].padStart(2, '0')}:${tParts[1].padStart(2, '0')}`;
+      }
+    }
+
+    const isHome = mandante.toLowerCase().includes('fluminense');
+    const opponent = isHome ? visitante : mandante;
+
+    result.push({
+      id: `ord-${ordNum}`,
+      opponent,
+      date: dateStr,
+      time: timeStr,
+      competition: (comp as any) || 'Brasileirão',
+      location: 'Maracanã',
+      isHome,
+      homeTeam: mandante,
+      awayTeam: visitante,
+      homeLogo: fotoMandante,
+      awayLogo: fotoVisitante,
+      tasks: []
+    });
+  }
+
+  return result;
+}
+
+// Fetch Google Sheet & merge into db.matches preserving user tasks per Ord
+async function syncGoogleSheetData(db: DbSchema): Promise<Match[]> {
+  try {
+    const res = await fetch(GOOGLE_SHEET_CSV_URL);
+    if (!res.ok) {
+      throw new Error(`HTTP Error ${res.status} ao acessar planilha do Google Drive`);
+    }
+
+    const csvText = await res.text();
+    const parsedMatches = parseGoogleSheetCSV(csvText);
+
+    if (parsedMatches.length === 0) {
+      console.warn('Google Sheet returned 0 parsed matches, keeping existing matches.');
+      return db.matches;
+    }
+
+    const existingMap = new Map<string, Match>();
+    (db.matches || []).forEach(m => {
+      if (m && m.id) existingMap.set(m.id, m);
+    });
+
+    const updatedMatches: Match[] = parsedMatches.map(inc => {
+      const existing = existingMap.get(inc.id);
+      return {
+        ...inc,
+        // Preserve user created tasks for this specific Ord number
+        tasks: existing ? existing.tasks || [] : [],
+        notes: existing ? existing.notes || '' : ''
+      };
+    });
+
+    db.matches = updatedMatches;
+    db.lastSyncedAt = new Date().toISOString();
+    saveDb(db);
+    return updatedMatches;
+
+  } catch (err: any) {
+    console.error('Failed to sync Google Sheet:', err.message);
+    return db.matches;
+  }
+}
+
+// Send next match reminder to Telegram
+async function triggerNextMatchReminder(db: DbSchema): Promise<{ success: boolean; message: string; result?: any }> {
+  const { token, chatId } = getTelegramCreds(db);
+  if (!token || !chatId) {
+    throw new Error('Configurações do Telegram ausentes.');
+  }
+
+  const nowBR = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const todayStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth() + 1).padStart(2, '0')}-${String(nowBR.getDate()).padStart(2, '0')}`;
+
+  // Find next upcoming match (date >= todayStr)
+  const upcoming = [...db.matches]
+    .filter(m => m && m.date && m.date >= todayStr)
+    .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
+
+  const nextMatch = upcoming[0] || db.matches[0];
+  if (!nextMatch) {
+    return { success: false, message: 'Nenhum próximo jogo encontrado para enviar notificação.' };
+  }
+
+  const msgText = formatMatchTelegramMessage(nextMatch);
+  const sendRes = await sendTelegramNotification(token, chatId, msgText);
+
+  const logItem: NotificationLog = {
+    id: `log-${Date.now()}-${nextMatch.id}`,
+    timestamp: new Date().toISOString(),
+    message: msgText,
+    type: 'cron',
+    success: true,
+    matchId: nextMatch.id,
+    opponent: nextMatch.opponent
+  };
+  db.logs.unshift(logItem);
+  saveDb(db);
+
+  return { success: true, message: `Lembrete do próximo jogo (${nextMatch.opponent}) enviado com sucesso!`, result: sendRes };
+}
+
+// Background Cron Scheduler (Brasília UTC-3)
+let lastSheetSyncKey = '';
+let lastTelegramKey = '';
+
+function startBackgroundCronScheduler() {
+  setInterval(async () => {
+    try {
+      const nowBR = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      const hour = nowBR.getHours();
+      const minute = nowBR.getMinutes();
+      const dayOfWeek = nowBR.getDay(); // 0 = Dom, 1 = Seg, ... 6 = Sáb
+      const dateStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth() + 1).padStart(2, '0')}-${String(nowBR.getDate()).padStart(2, '0')}`;
+      const timeHHMM = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+      const db = ensureDb();
+
+      // 1. Sincronização automática com a planilha base todos os dias às 08:00, 12:00 e 18:00 (BRT)
+      if ((hour === 8 || hour === 12 || hour === 18) && minute === 0) {
+        const syncKey = `${dateStr}_${hour}`;
+        if (lastSheetSyncKey !== syncKey) {
+          lastSheetSyncKey = syncKey;
+          console.log(`[SHEET AUTO-SYNC BRT] Executando sincronização com a planilha às ${hour}h00 em ${dateStr}...`);
+          await syncGoogleSheetData(db);
+        }
+      }
+
+      // 2. Envio de notificações no Telegram com base nas configurações personalizadas do usuário
+      const autoSchedule = db.telegramSettings?.autoSchedule;
+      if (db.telegramSettings?.enabled && autoSchedule?.enabled) {
+        const days = autoSchedule.daysOfWeek || [0, 1, 2, 3, 4, 5, 6];
+        const notifTimes = autoSchedule.notificationTimes || ['08:00', '12:00', '18:00'];
+
+        if (days.includes(dayOfWeek) && notifTimes.includes(timeHHMM)) {
+          if (autoSchedule.onlyOnMatchDays) {
+            const hasMatchToday = (db.matches || []).some(m => m && m.date === dateStr);
+            if (!hasMatchToday) return;
+          }
+
+          const tgKey = `${dateStr}_${timeHHMM}`;
+          if (lastTelegramKey !== tgKey) {
+            lastTelegramKey = tgKey;
+            console.log(`[TELEGRAM AUTO-NOTIFY BRT] Disparando mensagem do Telegram às ${timeHHMM} BRT em ${dateStr}...`);
+            await triggerNextMatchReminder(db);
+          }
+        }
+      }
+
+    } catch (e) {
+      console.error('[AUTO-CRON BRT Error]:', e);
+    }
+  }, 30000); // Check every 30 seconds
+}
+
 async function startServer() {
+  const db = ensureDb();
+  // Perform initial Google Sheet sync on server boot
+  await syncGoogleSheetData(db);
+  startBackgroundCronScheduler();
+
   // --- API ROUTES ---
 
-  // 1. Get system status & config
   app.get('/api/status', (req, res) => {
-    const db = ensureDb();
-    const { token, chatId } = getTelegramCreds(db);
-    
-    // Check today matches
+    const currentDb = ensureDb();
+    const { token, chatId } = getTelegramCreds(currentDb);
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayMatches = db.matches.filter(m => m.date === todayStr);
+    const todayMatches = currentDb.matches.filter(m => m.date === todayStr);
 
     res.json({
-      matchesCount: db.matches.length,
+      matchesCount: currentDb.matches.length,
       todayMatchesCount: todayMatches.length,
       telegramConfigured: Boolean(token && chatId),
-      activeTokenSource: process.env.TELEGRAM_BOT_TOKEN ? 'env' : (db.telegramSettings.botToken ? 'database' : 'none'),
-      activeChatIdSource: process.env.TELEGRAM_CHAT_ID ? 'env' : (db.telegramSettings.chatId ? 'database' : 'none'),
-      hasEnvToken: Boolean(process.env.TELEGRAM_BOT_TOKEN),
-      hasEnvChatId: Boolean(process.env.TELEGRAM_CHAT_ID)
+      activeTokenSource: process.env.TELEGRAM_BOT_TOKEN ? 'env' : (currentDb.telegramSettings.botToken ? 'database' : 'none'),
+      activeChatIdSource: process.env.TELEGRAM_CHAT_ID ? 'env' : (currentDb.telegramSettings.chatId ? 'database' : 'none'),
+      lastSyncedAt: currentDb.lastSyncedAt || null
     });
   });
 
-  // 2. Get/Set Telegram Settings
   app.get('/api/telegram/config', (req, res) => {
-    const db = ensureDb();
+    const currentDb = ensureDb();
     res.json({
-      botToken: db.telegramSettings.botToken ? `${db.telegramSettings.botToken.substring(0, 6)}...` : '',
-      chatId: db.telegramSettings.chatId || '',
-      enabled: db.telegramSettings.enabled ?? true,
-      autoSchedule: db.telegramSettings.autoSchedule || {
+      botToken: currentDb.telegramSettings.botToken ? `${currentDb.telegramSettings.botToken.substring(0, 6)}...` : '',
+      chatId: currentDb.telegramSettings.chatId || '',
+      enabled: currentDb.telegramSettings.enabled ?? true,
+      autoSchedule: currentDb.telegramSettings.autoSchedule || {
         enabled: true,
         daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-        notificationTimes: ['09:00', '12:00', '18:00'],
+        notificationTimes: ['08:00', '12:00', '18:00'],
         onlyOnMatchDays: false
       },
       hasEnvToken: Boolean(process.env.TELEGRAM_BOT_TOKEN),
@@ -229,56 +495,55 @@ async function startServer() {
 
   app.post('/api/telegram/config', (req, res) => {
     const { botToken, chatId, enabled, autoSchedule } = req.body;
-    const db = ensureDb();
+    const currentDb = ensureDb();
 
-    if (botToken !== undefined && !botToken.includes('...')) db.telegramSettings.botToken = botToken;
-    if (chatId !== undefined) db.telegramSettings.chatId = chatId;
-    if (enabled !== undefined) db.telegramSettings.enabled = Boolean(enabled);
-    if (autoSchedule !== undefined) db.telegramSettings.autoSchedule = autoSchedule;
+    if (botToken !== undefined && !botToken.includes('...')) currentDb.telegramSettings.botToken = botToken;
+    if (chatId !== undefined) currentDb.telegramSettings.chatId = chatId;
+    if (enabled !== undefined) currentDb.telegramSettings.enabled = Boolean(enabled);
+    if (autoSchedule !== undefined) currentDb.telegramSettings.autoSchedule = autoSchedule;
 
-    saveDb(db);
-    res.json({ success: true, message: 'Configurações do Telegram salvas com sucesso!' });
+    saveDb(currentDb);
+    res.json({ success: true, message: 'Configurações salvas com sucesso!' });
   });
 
-  // 3. Test Telegram Message
   app.post('/api/telegram/test', async (req, res) => {
     try {
-      const db = ensureDb();
-      const { customToken, customChatId, customMessage, matchId } = req.body;
+      const currentDb = ensureDb();
+      const { customToken, customChatId, matchId } = req.body;
 
-      const token = customToken || process.env.TELEGRAM_BOT_TOKEN || db.telegramSettings.botToken;
-      const chatId = customChatId || process.env.TELEGRAM_CHAT_ID || db.telegramSettings.chatId;
+      const token = customToken || process.env.TELEGRAM_BOT_TOKEN || currentDb.telegramSettings.botToken;
+      const chatId = customChatId || process.env.TELEGRAM_CHAT_ID || currentDb.telegramSettings.chatId;
 
       if (!token || !chatId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Configurações do Telegram ausentes. Por favor, preencha o Token do Bot e o Chat ID.'
-        });
+        return res.status(400).json({ success: false, error: 'Configurações do Telegram ausentes.' });
       }
 
-      let messageToSend = customMessage;
+      let messageToSend = '';
+      if (matchId) {
+        const match = currentDb.matches.find(m => m.id === matchId);
+        if (match) messageToSend = formatMatchTelegramMessage(match);
+      }
 
       if (!messageToSend) {
-        if (matchId) {
-          const match = db.matches.find(m => m.id === matchId);
-          if (match) {
-            messageToSend = formatMatchTelegramMessage(match);
-          }
-        }
-        
-        if (!messageToSend) {
-          // Default test message
-          messageToSend = `🇭🇺 *TESTE DE INTEGRAÇÃO - FLUREMIND* 🇭🇺\n\n` +
-            `Olá! Seu Bot do Telegram foi configurado com sucesso para enviar lembretes dos jogos do *Fluminense FC*! ⚽\n\n` +
-            `📅 *Status do Sistema:* Ativo e pronto para os jogos!\n` +
-            `⏰ *Vercel Cron:* Configurado para monitorar diariamente.\n\n` +
-            `🔥 *Saudações Tricolores!* 🛡️`;
+        // Default message to next match
+        const nowBR = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const todayStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth() + 1).padStart(2, '0')}-${String(nowBR.getDate()).padStart(2, '0')}`;
+        const upcoming = [...currentDb.matches]
+          .filter(m => m && m.date && m.date >= todayStr)
+          .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
+
+        const targetMatch = upcoming[0] || currentDb.matches[0];
+        if (targetMatch) {
+          messageToSend = formatMatchTelegramMessage(targetMatch);
+        } else {
+          messageToSend = `🇭🇺 <b>TESTE DE INTEGRAÇÃO - FLUREMIND</b> 🇭🇺\n\n` +
+            `Olá! Seu Bot do Telegram foi configurado com sucesso para enviar lembretes do <b>Fluminense FC</b>! ⚽\n\n` +
+            `🔥 <b>SAUDAÇÕES TRICOLORES!</b> 🇭🇺`;
         }
       }
 
       const telegramResult = await sendTelegramNotification(token, chatId, messageToSend);
 
-      // Log the test
       const logItem: NotificationLog = {
         id: `log-${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -287,260 +552,72 @@ async function startServer() {
         success: true,
         matchId
       };
-      db.logs.unshift(logItem);
-      saveDb(db);
+      currentDb.logs.unshift(logItem);
+      saveDb(currentDb);
 
-      res.json({
-        success: true,
-        message: 'Notificação enviada com sucesso ao Telegram!',
-        telegramResult
-      });
+      res.json({ success: true, message: 'Notificação enviada no Telegram!', telegramResult });
     } catch (err: any) {
-      const db = ensureDb();
+      const currentDb = ensureDb();
       const logItem: NotificationLog = {
         id: `log-${Date.now()}`,
         timestamp: new Date().toISOString(),
-        message: req.body.customMessage || 'Teste de notificação',
+        message: 'Teste de notificação',
         type: 'test',
         success: false,
         error: err.message || 'Erro desconhecido'
       };
-      db.logs.unshift(logItem);
-      saveDb(db);
+      currentDb.logs.unshift(logItem);
+      saveDb(currentDb);
 
-      res.status(500).json({
-        success: false,
-        error: err.message || 'Falha ao enviar mensagem pelo Telegram'
-      });
+      res.status(500).json({ success: false, error: err.message || 'Falha ao enviar mensagem' });
     }
   });
 
-  // 4. Cron Endpoint (Vercel Cron compatible / Manual Trigger)
+  // Manual Trigger for Next Match Reminder
   const handleCronReminders = async (req: express.Request, res: express.Response) => {
     try {
-      const db = ensureDb();
-      const { token, chatId } = getTelegramCreds(db);
-
-      // Validate secret if CRON_SECRET is configured
-      const cronSecret = process.env.CRON_SECRET;
-      if (cronSecret) {
-        const authHeader = req.headers.authorization;
-        const cronHeader = req.headers['x-cron-secret'];
-        if (authHeader !== `Bearer ${cronSecret}` && cronHeader !== cronSecret && req.query.secret !== cronSecret) {
-          return res.status(401).json({ error: 'Acesso não autorizado ao Cron endpoint. Token de segurança inválido.' });
-        }
-      }
-
-      if (!token || !chatId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Cron executado, mas TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não estão configurados.'
-        });
-      }
-
-      // Check matches for today (local date format YYYY-MM-DD)
-      const now = new Date();
-      // Format as YYYY-MM-DD in America/Sao_Paulo if available or system local
-      const todayStr = now.toISOString().split('T')[0];
-      
-      const matchesToday = db.matches.filter(m => m.date === todayStr);
-
-      if (matchesToday.length === 0) {
-        const resultMsg = `Nenhum jogo do Fluminense agendado para hoje (${todayStr}).`;
-        return res.json({
-          success: true,
-          date: todayStr,
-          matchesTodayCount: 0,
-          message: resultMsg
-        });
-      }
-
-      const results = [];
-      for (const match of matchesToday) {
-        const messageText = formatMatchTelegramMessage(match);
-        const sendRes = await sendTelegramNotification(token, chatId, messageText);
-        
-        const logItem: NotificationLog = {
-          id: `log-${Date.now()}-${match.id}`,
-          timestamp: new Date().toISOString(),
-          message: messageText,
-          type: 'cron',
-          success: true,
-          matchId: match.id,
-          opponent: match.opponent
-        };
-        db.logs.unshift(logItem);
-        
-        results.push({
-          matchId: match.id,
-          opponent: match.opponent,
-          telegramResponse: sendRes
-        });
-      }
-
-      saveDb(db);
-
-      res.json({
-        success: true,
-        date: todayStr,
-        matchesTodayCount: matchesToday.length,
-        results
-      });
-
+      const currentDb = ensureDb();
+      const result = await triggerNextMatchReminder(currentDb);
+      res.json(result);
     } catch (err: any) {
-      console.error('Erro na execução do Cron:', err);
-      res.status(500).json({
-        success: false,
-        error: err.message || 'Erro interno ao processar lembretes do Cron'
-      });
+      res.status(500).json({ success: false, error: err.message || 'Erro ao disparar lembretes' });
     }
   };
 
   app.get('/api/cron/reminders', handleCronReminders);
   app.post('/api/cron/reminders', handleCronReminders);
 
-  // 4.5 Fixtures Sync Endpoint (Sofascore & Live API Sync)
-  const syncFixturesWithLiveSources = async (db: DbSchema) => {
-    let fetchedMatches: Match[] = [];
-
+  // Sync Google Sheet API
+  const handleSheetSync = async (req: express.Request, res: express.Response) => {
     try {
-      const espnRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/teams/3445/schedule');
-      if (espnRes.ok) {
-        const data = await espnRes.json();
-        const events = data.events || [];
-        
-        fetchedMatches = events.map((e: any) => {
-          const dateObj = new Date(e.date);
-          const dateStr = dateObj.toISOString().split('T')[0];
-          const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
-          const compName = e.season?.slug ? (e.season.slug.includes('libertadores') ? 'Copa Libertadores' : 'Brasileirão') : 'Brasileirão';
-          const venue = e.competitions?.[0]?.venue?.fullName || 'Maracanã, Rio de Janeiro';
-          const competitors = e.competitions?.[0]?.competitors || [];
-          const fluComp = competitors.find((c: any) => c.team?.id === '3445' || c.team?.displayName?.toLowerCase().includes('fluminense'));
-          const oppComp = competitors.find((c: any) => c !== fluComp);
-          const isHome = fluComp ? fluComp.homeAway === 'home' : true;
-          const rawOpp = oppComp?.team?.displayName || 'Adversário';
-          const opponent = formatOpponentName(rawOpp);
-
-          return {
-            id: `espn-${e.id}`,
-            opponent,
-            date: dateStr,
-            time: timeStr,
-            competition: compName,
-            location: venue,
-            isHome,
-            notes: e.name || '',
-            tasks: []
-          };
-        });
-      }
-    } catch (e) {
-      console.warn('ESPN fetch failed, using Sofascore fixtures fallback:', e);
+      const currentDb = ensureDb();
+      const updatedMatches = await syncGoogleSheetData(currentDb);
+      res.json({
+        success: true,
+        message: 'Jogos sincronizados com a planilha do Google Drive!',
+        matches: updatedMatches,
+        lastSyncedAt: currentDb.lastSyncedAt
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar planilha' });
     }
-
-    // Always merge with Sofascore exact upcoming fixtures list from Fluminense page
-    const SOFASCORE_FIXTURES: Match[] = [
-      { id: 'sofa-gremio', opponent: 'Grêmio', date: '2026-07-26', time: '18:30', competition: 'Brasileirão', location: 'Arena do Grêmio, Porto Alegre', isHome: false, notes: 'Rodada 17', tasks: [] },
-      { id: 'sofa-bahia', opponent: 'Bahia', date: '2026-07-29', time: '21:30', competition: 'Brasileirão', location: 'Maracanã, Rio de Janeiro', isHome: true, notes: 'Rodada 18', tasks: [] },
-      { id: 'sofa-vasco-1', opponent: 'Vasco da Gama', date: '2026-08-01', time: '17:30', competition: 'Copa do Brasil', location: 'São Januário, Rio de Janeiro', isHome: false, notes: 'Oitavas - Ida', tasks: [] },
-      { id: 'sofa-vasco-2', opponent: 'Vasco da Gama', date: '2026-08-05', time: '21:30', competition: 'Copa do Brasil', location: 'Maracanã, Rio de Janeiro', isHome: true, notes: 'Oitavas - Volta', tasks: [] },
-      { id: 'sofa-botafogo', opponent: 'Botafogo', date: '2026-08-08', time: '21:00', competition: 'Brasileirão', location: 'Estádio Nilton Santos (Engenhão)', isHome: false, notes: 'Clássico Vovô', tasks: [] },
-      { id: 'sofa-independiente', opponent: 'Independiente Riv.', date: '2026-08-11', time: '19:00', competition: 'Copa Libertadores', location: 'Maracanã, Rio de Janeiro', isHome: true, notes: 'Libertadores', tasks: [] },
-      { id: 'sofa-flamengo', opponent: 'Flamengo', date: '2026-08-16', time: '16:00', competition: 'Brasileirão', location: 'Maracanã, Rio de Janeiro', isHome: true, notes: 'Fla-Flu', tasks: [] },
-      { id: 'sofa-ldu', opponent: 'LDU Quito', date: '2026-08-20', time: '21:30', competition: 'Copa Libertadores', location: 'Estadio Rodrigo Paz Delgado', isHome: false, notes: 'Libertadores', tasks: [] }
-    ];
-
-    const combinedIncoming = [...SOFASCORE_FIXTURES, ...fetchedMatches];
-
-    // Merge into db.matches PRESERVING existing user tasks and reminders!
-    db.matches = mergeMatchesPreservingTasks(db.matches, combinedIncoming);
-    saveDb(db);
-    return db.matches;
   };
 
-  app.get('/api/sync/fixtures', async (req, res) => {
-    try {
-      const db = ensureDb();
-      const updatedMatches = await syncFixturesWithLiveSources(db);
-      res.json({
-        success: true,
-        message: 'Jogos do Fluminense sincronizados com sucesso!',
-        matches: updatedMatches,
-        lastSynced: new Date().toISOString()
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar jogos' });
-    }
-  });
+  app.get('/api/sync/sheet', handleSheetSync);
+  app.post('/api/sync/sheet', handleSheetSync);
+  app.get('/api/sync/fixtures', handleSheetSync);
+  app.post('/api/sync/fixtures', handleSheetSync);
 
-  app.post('/api/sync/fixtures', async (req, res) => {
-    try {
-      const db = ensureDb();
-      const updatedMatches = await syncFixturesWithLiveSources(db);
-      res.json({
-        success: true,
-        message: 'Jogos do Fluminense sincronizados com sucesso!',
-        matches: updatedMatches,
-        lastSynced: new Date().toISOString()
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar jogos' });
-    }
-  });
-
-  // 5. Matches CRUD
+  // Matches List
   app.get('/api/matches', (req, res) => {
-    const db = ensureDb();
-    res.json(db.matches);
+    const currentDb = ensureDb();
+    res.json(currentDb.matches);
   });
 
-  app.post('/api/matches', (req, res) => {
-    const db = ensureDb();
-    const newMatch: Match = {
-      id: `match-${Date.now()}`,
-      opponent: req.body.opponent || 'Adversário',
-      date: req.body.date || new Date().toISOString().split('T')[0],
-      time: req.body.time || '16:00',
-      competition: req.body.competition || 'Brasileirão',
-      location: req.body.location || 'Maracanã, Rio de Janeiro',
-      isHome: req.body.isHome !== undefined ? req.body.isHome : true,
-      notes: req.body.notes || '',
-      tasks: req.body.tasks || []
-    };
-
-    db.matches.unshift(newMatch);
-    saveDb(db);
-    res.status(201).json(newMatch);
-  });
-
-  app.put('/api/matches/:id', (req, res) => {
-    const db = ensureDb();
-    const index = db.matches.findIndex(m => m.id === req.params.id);
-    if (index === -1) {
-      return res.status(404).json({ error: 'Jogo não encontrado' });
-    }
-
-    db.matches[index] = {
-      ...db.matches[index],
-      ...req.body
-    };
-
-    saveDb(db);
-    res.json(db.matches[index]);
-  });
-
-  app.delete('/api/matches/:id', (req, res) => {
-    const db = ensureDb();
-    db.matches = db.matches.filter(m => m.id !== req.params.id);
-    saveDb(db);
-    res.json({ success: true, id: req.params.id });
-  });
-
-  // Task management per match
+  // Tasks Management per Match
   app.post('/api/matches/:id/tasks', (req, res) => {
-    const db = ensureDb();
-    const match = db.matches.find(m => m.id === req.params.id);
+    const currentDb = ensureDb();
+    const match = currentDb.matches.find(m => m.id === req.params.id);
     if (!match) return res.status(404).json({ error: 'Jogo não encontrado' });
 
     const newTask = {
@@ -550,50 +627,51 @@ async function startServer() {
       priority: req.body.priority || 'normal'
     };
 
+    if (!match.tasks) match.tasks = [];
     match.tasks.push(newTask);
-    saveDb(db);
+    saveDb(currentDb);
     res.status(201).json(newTask);
   });
 
   app.patch('/api/matches/:id/tasks/:taskId', (req, res) => {
-    const db = ensureDb();
-    const match = db.matches.find(m => m.id === req.params.id);
+    const currentDb = ensureDb();
+    const match = currentDb.matches.find(m => m.id === req.params.id);
     if (!match) return res.status(404).json({ error: 'Jogo não encontrado' });
 
-    const task = match.tasks.find(t => t.id === req.params.taskId);
+    const task = (match.tasks || []).find(t => t.id === req.params.taskId);
     if (!task) return res.status(404).json({ error: 'Tarefa não encontrada' });
 
     if (req.body.completed !== undefined) task.completed = req.body.completed;
     if (req.body.text !== undefined) task.text = req.body.text;
 
-    saveDb(db);
+    saveDb(currentDb);
     res.json(task);
   });
 
   app.delete('/api/matches/:id/tasks/:taskId', (req, res) => {
-    const db = ensureDb();
-    const match = db.matches.find(m => m.id === req.params.id);
+    const currentDb = ensureDb();
+    const match = currentDb.matches.find(m => m.id === req.params.id);
     if (!match) return res.status(404).json({ error: 'Jogo não encontrado' });
 
-    match.tasks = match.tasks.filter(t => t.id !== req.params.taskId);
-    saveDb(db);
+    match.tasks = (match.tasks || []).filter(t => t.id !== req.params.taskId);
+    saveDb(currentDb);
     res.json({ success: true, taskId: req.params.taskId });
   });
 
-  // Logs Endpoint
+  // Logs
   app.get('/api/logs', (req, res) => {
-    const db = ensureDb();
-    res.json(db.logs);
+    const currentDb = ensureDb();
+    res.json(currentDb.logs);
   });
 
   app.delete('/api/logs', (req, res) => {
-    const db = ensureDb();
-    db.logs = [];
-    saveDb(db);
+    const currentDb = ensureDb();
+    currentDb.logs = [];
+    saveDb(currentDb);
     res.json({ success: true });
   });
 
-  // --- VITE MIDDLEWARE FOR DEVELOPMENT OR STATIC SERVING IN PRODUCTION ---
+  // --- VITE MIDDLEWARE FOR DEVELOPMENT OR STATIC SERVING ---
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -609,7 +687,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`FluRemind Server running on http://localhost:${PORT}`);
   });
 }
 
