@@ -168,6 +168,7 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
+    handleSyncFixtures();
 
     // Auto-poll cloud every 5 seconds so any device opening the link gets real-time sync
     const interval = setInterval(() => {
