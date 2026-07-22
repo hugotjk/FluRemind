@@ -15,6 +15,15 @@ export const Header: React.FC<HeaderProps> = ({
   status,
   onOpenSettings
 }) => {
+  const isServerConfigured = status?.telegramConfigured;
+  const isOnline = status !== null ? isServerConfigured : true;
+
+  const statusBg = isOnline ? 'bg-emerald-500' : 'bg-amber-500';
+  const pingBg = isOnline ? 'bg-emerald-400' : 'bg-amber-400';
+  const statusTooltip = status
+    ? (isServerConfigured ? 'Servidor Ativo & Telegram Configurado' : 'Servidor Conectado (Telegram não configurado)')
+    : 'Sincronizado com Planilha Base do Google';
+
   return (
     <header className="bg-gradient-to-r from-[#5a0c1a] via-[#722F37] to-[#004d26] text-white border-b-4 border-[#e6b800] shadow-xl sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
@@ -22,13 +31,13 @@ export const Header: React.FC<HeaderProps> = ({
           
           {/* Logo and Brand */}
           <div className="flex items-center gap-3">
-            <div className="relative">
+            <div className="relative cursor-help" title={statusTooltip}>
               <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl shadow-inner">
                 🇭🇺
               </div>
               <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${status?.telegramConfigured ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-                <span className={`relative inline-flex rounded-full h-4 w-4 border-2 border-[#722F37] ${status?.telegramConfigured ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${pingBg}`}></span>
+                <span className={`relative inline-flex rounded-full h-4 w-4 border-2 border-[#722F37] ${statusBg}`}></span>
               </span>
             </div>
             

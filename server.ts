@@ -688,6 +688,12 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`FluRemind Server running on http://localhost:${PORT}`);
+    const initialDb = ensureDb();
+    syncGoogleSheetData(initialDb).then(() => {
+      console.log(`[BOOT] Planilha do Google Drive sincronizada no boot (${initialDb.matches.length} jogos).`);
+    }).catch(err => {
+      console.warn('[BOOT Sync Error]:', err);
+    });
   });
 }
 

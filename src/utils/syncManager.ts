@@ -53,6 +53,118 @@ export async function safeFetchJson<T>(url: string, options?: RequestInit): Prom
   }
 }
 
+const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1BgoimzpqdL5UXpCw12vz4BiSuRYxIlGr/export?format=csv';
+
+export function parseCsvLine(text: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim().replace(/^"|"$/g, ''));
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim().replace(/^"|"$/g, ''));
+  return result;
+}
+
+export function parseGoogleSheetCSV(text: string): Match[] {
+  const lines = text.split(/\r?\n/);
+  const result: Match[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const cols = parseCsvLine(line);
+    const ordStr = cols[0] ? cols[0].trim() : '';
+    const ordNum = Number(ordStr);
+    if (!ordStr || isNaN(ordNum)) continue;
+
+    const rawData = cols[1] ? cols[1].trim() : '';
+    const rawHora = cols[2] ? cols[2].trim() : '';
+    const comp = cols[3] ? cols[3].trim() : '';
+    const mandante = cols[4] ? cols[4].trim() : '';
+    const visitante = cols[5] ? cols[5].trim() : '';
+    const fotoMandante = cols[6] ? cols[6].trim() : '';
+    const fotoVisitante = cols[7] ? cols[7].trim() : '';
+
+    if (!mandante && !visitante) continue;
+
+    let dateStr = '';
+    if (rawData.includes('/')) {
+      const parts = rawData.split('/');
+      if (parts.length === 3) {
+        let p1 = parseInt(parts[0], 10);
+        let p2 = parseInt(parts[1], 10);
+        let year = parseInt(parts[2], 10);
+        let month = p1;
+        let day = p2;
+        if (p1 > 12) { day = p1; month = p2; }
+        dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    } else {
+      dateStr = rawData;
+    }
+
+    let timeStr = rawHora;
+    if (rawHora.toLowerCase().includes('pm') || rawHora.toLowerCase().includes('am')) {
+      const isPM = rawHora.toLowerCase().includes('pm');
+      const clean = rawHora.replace(/(am|pm)/i, '').trim();
+      const tParts = clean.split(':');
+      let h = parseInt(tParts[0], 10);
+      const m = tParts[1] ? tParts[1].padStart(2, '0') : '00';
+      if (isPM && h < 12) h += 12;
+      if (!isPM && h === 12) h = 0;
+      timeStr = `${String(h).padStart(2, '0')}:${m}`;
+    } else {
+      const tParts = rawHora.split(':');
+      if (tParts.length >= 2) {
+        timeStr = `${tParts[0].padStart(2, '0')}:${tParts[1].padStart(2, '0')}`;
+      }
+    }
+
+    const isHome = mandante.toLowerCase().includes('fluminense');
+    const opponent = isHome ? visitante : mandante;
+
+    result.push({
+      id: `ord-${ordNum}`,
+      opponent,
+      date: dateStr,
+      time: timeStr,
+      competition: (comp as any) || 'Brasileirão',
+      location: 'Maracanã',
+      isHome,
+      homeTeam: mandante,
+      awayTeam: visitante,
+      homeLogo: fotoMandante,
+      awayLogo: fotoVisitante,
+      tasks: []
+    });
+  }
+
+  return result;
+}
+
+export async function fetchDirectGoogleSheetCSV(): Promise<Match[]> {
+  try {
+    const res = await fetch(GOOGLE_SHEET_CSV_URL);
+    if (!res.ok) return [];
+    const text = await res.text();
+    return parseGoogleSheetCSV(text);
+  } catch (e) {
+    console.warn('Client-side direct Google Sheet fetch warning:', e);
+    return [];
+  }
+}
+
 // LocalStorage helpers
 export function getLocalMatches(): Match[] {
   try {
@@ -192,3 +304,43 @@ export async function pushCloudData(matchesData: Match[], telegramData?: Telegra
     console.log('Cloud push notice:', e);
   }
 }
+
+// Master multi-tier synchronization function (Server -> Google Sheet Direct -> Cloud Blob -> LocalStorage)
+export async function syncFixturesAndSheet(): Promise<Match[]> {
+  // 1. Try server API endpoint
+  try {
+    const res = await safeFetchJson<{ success?: boolean; matches?: Match[] }>('/api/sync/sheet');
+    if (res.ok && res.data && Array.isArray(res.data.matches) && res.data.matches.length > 0) {
+      saveLocalMatches(res.data.matches);
+      return res.data.matches;
+    }
+  } catch (e) {}
+
+  // 2. Direct client-side fetch from Google Sheets CSV
+  const directMatches = await fetchDirectGoogleSheetCSV();
+  if (directMatches.length > 0) {
+    const local = getLocalMatches();
+    const localMap = new Map((local || []).map(m => [m.id, m]));
+    const merged = directMatches.map(m => {
+      const existing = localMap.get(m.id);
+      return {
+        ...m,
+        tasks: existing ? existing.tasks || [] : [],
+        notes: existing ? existing.notes || '' : ''
+      };
+    });
+    saveLocalMatches(merged);
+    return merged;
+  }
+
+  // 3. Multi-Device cloud fallback
+  const cloud = await syncCloudData();
+  if (cloud.success && cloud.remoteMatches && cloud.remoteMatches.length > 0) {
+    saveLocalMatches(cloud.remoteMatches);
+    return cloud.remoteMatches;
+  }
+
+  // 4. Fallback to localStorage
+  return getLocalMatches();
+}
+

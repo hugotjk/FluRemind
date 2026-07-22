@@ -14,7 +14,8 @@ import {
   getLocalTelegramSettings,
   saveLocalTelegramSettings,
   getLocalLogs,
-  saveLocalLogs
+  saveLocalLogs,
+  syncFixturesAndSheet
 } from './utils/syncManager';
 
 export default function App() {
@@ -53,21 +54,17 @@ export default function App() {
   // Sync with Google Sheet
   const handleSyncSheet = async () => {
     try {
-      const res = await safeFetchJson<{ matches: Match[]; lastSyncedAt?: string }>('/api/sync/sheet');
-      if (res.ok && res.data && Array.isArray(res.data.matches)) {
-        setMatches(res.data.matches);
-        saveLocalMatches(res.data.matches);
-        return res.data.matches;
-      } else {
-        const fallback = getLocalMatches();
-        setMatches(fallback);
+      const syncedMatches = await syncFixturesAndSheet();
+      if (syncedMatches && Array.isArray(syncedMatches) && syncedMatches.length > 0) {
+        setMatches(syncedMatches);
+        return syncedMatches;
       }
     } catch (err) {
       console.warn('Erro na sincronização da planilha:', err);
-      const fallback = getLocalMatches();
-      setMatches(fallback);
     }
-    return null;
+    const fallback = getLocalMatches();
+    setMatches(fallback);
+    return fallback;
   };
 
   // Fetch initial data on boot
