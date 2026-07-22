@@ -473,6 +473,37 @@ function startBackgroundCronScheduler() {
 
       const db = ensureDb();
 
+      // Pull cloud telegram settings so changes made on Vercel/mobile are recognized by server
+      try {
+        const cloudRes = await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_BLOB_ID}`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (cloudRes.ok) {
+          const cloudData: any = await cloudRes.json();
+          if (cloudData) {
+            let dbUpdated = false;
+            if (cloudData.telegramSettings && cloudData.telegramSettings.botToken) {
+              db.telegramSettings = {
+                ...db.telegramSettings,
+                ...cloudData.telegramSettings
+              };
+              dbUpdated = true;
+            }
+            if (Array.isArray(cloudData.matches) && cloudData.matches.length > 0) {
+              const cloudTaskMap = new Map<string, any[]>();
+              cloudData.matches.forEach((m: any) => { if (m && m.id && Array.isArray(m.tasks)) cloudTaskMap.set(m.id, m.tasks); });
+              (db.matches || []).forEach(m => {
+                if (m && m.id && cloudTaskMap.has(m.id)) {
+                  m.tasks = cloudTaskMap.get(m.id)!;
+                }
+              });
+              dbUpdated = true;
+            }
+            if (dbUpdated) saveDb(db);
+          }
+        }
+      } catch (e) {}
+
       // 1. Sincronização automática com a planilha base todos os dias às 08:00, 12:00 e 18:00 (BRT)
       if ((hour === 8 || hour === 12 || hour === 18) && minute === 0) {
         const syncKey = `${dateStr}_${hour}`;

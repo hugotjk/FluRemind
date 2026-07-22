@@ -88,10 +88,16 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
     setIsSaving(true);
     setStatusMessage(null);
     try {
+      let finalTimes = [...times];
+      if (newTime && !finalTimes.includes(newTime)) {
+        finalTimes = [...finalTimes, newTime].sort();
+        setTimes(finalTimes);
+      }
+
       const autoSchedule: AutoScheduleSettings = {
         enabled: autoEnabled,
         daysOfWeek: selectedDays,
-        notificationTimes: times,
+        notificationTimes: finalTimes,
         onlyOnMatchDays: onlyMatchDays
       };
 

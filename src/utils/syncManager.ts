@@ -305,46 +305,52 @@ export async function pushCloudData(matchesData: Match[], telegramData?: Telegra
   }
 }
 
-export function mergeMatchesWithTasks(...matchLists: Match[][]): Match[] {
-  const validLists = matchLists.filter(l => Array.isArray(l) && l.length > 0);
-  if (validLists.length === 0) return [];
+export function mergeMatchesWithTasks(
+  baseFixtures: Match[],
+  cloudMatches: Match[] = [],
+  serverMatches: Match[] = [],
+  localMatches: Match[] = []
+): Match[] {
+  if (!Array.isArray(baseFixtures) || baseFixtures.length === 0) {
+    if (cloudMatches.length > 0) return cloudMatches;
+    if (serverMatches.length > 0) return serverMatches;
+    if (localMatches.length > 0) return localMatches;
+    return [];
+  }
 
-  const base = validLists[0];
+  const cloudMap = new Map<string, Match>();
+  cloudMatches.forEach(m => { if (m && m.id) cloudMap.set(m.id, m); });
 
-  return base.map(m => {
-    if (!m || !m.id) return m;
+  const serverMap = new Map<string, Match>();
+  serverMatches.forEach(m => { if (m && m.id) serverMap.set(m.id, m); });
 
-    const versions = validLists.map(l => l.find(item => item && item.id === m.id)).filter(Boolean) as Match[];
-    const primaryVersion = versions[0];
-    let tasks = primaryVersion.tasks || [];
+  const localMap = new Map<string, Match>();
+  localMatches.forEach(m => { if (m && m.id) localMap.set(m.id, m); });
 
-    // Merge completed status if checked off on any device
-    const taskStatusMap = new Map<string, boolean>();
-    versions.forEach(v => {
-      (v.tasks || []).forEach(t => {
-        if (t && t.id && t.completed) {
-          taskStatusMap.set(t.id, true);
-        }
-      });
-    });
+  return baseFixtures.map(baseMatch => {
+    if (!baseMatch || !baseMatch.id) return baseMatch;
 
-    tasks = tasks.map(t => {
-      if (t && t.id && taskStatusMap.has(t.id)) {
-        return { ...t, completed: true };
-      }
-      return t;
-    });
+    const id = baseMatch.id;
+    const cloudItem = cloudMap.get(id);
+    const serverItem = serverMap.get(id);
+    const localItem = localMap.get(id);
 
-    let notes = m.notes || '';
-    for (const v of versions) {
-      if (v.notes) {
-        notes = v.notes;
-        break;
-      }
+    // Collect task array with priority: cloudItem > serverItem > localItem > baseMatch
+    let tasks: any[] = [];
+    if (cloudItem && Array.isArray(cloudItem.tasks)) {
+      tasks = cloudItem.tasks;
+    } else if (serverItem && Array.isArray(serverItem.tasks) && serverItem.tasks.length > 0) {
+      tasks = serverItem.tasks;
+    } else if (localItem && Array.isArray(localItem.tasks) && localItem.tasks.length > 0) {
+      tasks = localItem.tasks;
+    } else if (Array.isArray(baseMatch.tasks)) {
+      tasks = baseMatch.tasks;
     }
 
+    const notes = cloudItem?.notes || serverItem?.notes || localItem?.notes || baseMatch.notes || '';
+
     return {
-      ...m,
+      ...baseMatch,
       tasks,
       notes
     };
@@ -362,29 +368,8 @@ export async function syncFixturesAndSheet(): Promise<Match[]> {
       if (Array.isArray(cloud.remoteMatches) && cloud.remoteMatches.length > 0) {
         cloudMatches = cloud.remoteMatches;
       }
-      if (cloud.remoteTelegram) {
-        const localTg = getLocalTelegramSettings();
-        if (localTg) {
-          // Merge times array so no scheduled times get lost
-          const mergedTimes = Array.from(new Set([
-            ...(localTg.autoSchedule?.notificationTimes || []),
-            ...(cloud.remoteTelegram.autoSchedule?.notificationTimes || [])
-          ])).sort();
-
-          const mergedTg: TelegramSettings = {
-            ...cloud.remoteTelegram,
-            ...localTg,
-            autoSchedule: {
-              enabled: localTg.autoSchedule?.enabled ?? cloud.remoteTelegram.autoSchedule?.enabled ?? true,
-              daysOfWeek: localTg.autoSchedule?.daysOfWeek || cloud.remoteTelegram.autoSchedule?.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
-              notificationTimes: mergedTimes.length > 0 ? mergedTimes : (localTg.autoSchedule?.notificationTimes || ['08:00', '12:00', '18:00']),
-              onlyOnMatchDays: localTg.autoSchedule?.onlyOnMatchDays ?? cloud.remoteTelegram.autoSchedule?.onlyOnMatchDays ?? false
-            }
-          };
-          saveLocalTelegramSettings(mergedTg);
-        } else {
-          saveLocalTelegramSettings(cloud.remoteTelegram);
-        }
+      if (cloud.remoteTelegram && cloud.remoteTelegram.botToken) {
+        saveLocalTelegramSettings(cloud.remoteTelegram);
       }
     }
   } catch (e) {}
@@ -393,7 +378,7 @@ export async function syncFixturesAndSheet(): Promise<Match[]> {
   try {
     const res = await safeFetchJson<{ success?: boolean; matches?: Match[] }>('/api/sync/sheet');
     if (res.ok && res.data && Array.isArray(res.data.matches) && res.data.matches.length > 0) {
-      const merged = mergeMatchesWithTasks(res.data.matches, cloudMatches, localMatches);
+      const merged = mergeMatchesWithTasks(res.data.matches, cloudMatches, res.data.matches, localMatches);
       saveLocalMatches(merged);
       return merged;
     }
@@ -402,14 +387,14 @@ export async function syncFixturesAndSheet(): Promise<Match[]> {
   // 2. Direct client-side fetch from Google Sheets CSV
   const directMatches = await fetchDirectGoogleSheetCSV();
   if (directMatches.length > 0) {
-    const merged = mergeMatchesWithTasks(directMatches, cloudMatches, localMatches);
+    const merged = mergeMatchesWithTasks(directMatches, cloudMatches, [], localMatches);
     saveLocalMatches(merged);
     return merged;
   }
 
   // 3. Multi-Device cloud fallback
   if (cloudMatches.length > 0) {
-    const merged = mergeMatchesWithTasks(cloudMatches, localMatches);
+    const merged = mergeMatchesWithTasks(cloudMatches, cloudMatches, [], localMatches);
     saveLocalMatches(merged);
     return merged;
   }
