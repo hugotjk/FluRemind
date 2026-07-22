@@ -32,8 +32,13 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Logo and Brand */}
           <div className="flex items-center gap-3">
             <div className="relative cursor-help" title={statusTooltip}>
-              <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl shadow-inner">
-                🇭🇺
+              <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center p-1 shadow-inner">
+                <img 
+                  src="https://escudosfc.com.br/images/fluminense.png" 
+                  alt="Fluminense FC" 
+                  className="w-8 h-8 object-contain"
+                  referrerPolicy="no-referrer"
+                />
               </div>
               <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${pingBg}`}></span>
