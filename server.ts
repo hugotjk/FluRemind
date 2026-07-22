@@ -534,11 +534,15 @@ async function startServer() {
     });
   });
 
+  app.get('/telegram', (req, res) => {
+    res.redirect('/');
+  });
+
   app.get('/api/telegram/config', (req, res) => {
     const currentDb = ensureDb();
     res.json({
-      botToken: currentDb.telegramSettings.botToken ? `${currentDb.telegramSettings.botToken.substring(0, 6)}...` : '',
-      chatId: currentDb.telegramSettings.chatId || '',
+      botToken: currentDb.telegramSettings.botToken || DEFAULT_BOT_TOKEN,
+      chatId: currentDb.telegramSettings.chatId || DEFAULT_CHAT_ID,
       enabled: currentDb.telegramSettings.enabled ?? true,
       autoSchedule: currentDb.telegramSettings.autoSchedule || {
         enabled: true,
@@ -555,13 +559,14 @@ async function startServer() {
     const { botToken, chatId, enabled, autoSchedule } = req.body;
     const currentDb = ensureDb();
 
-    if (botToken !== undefined && !botToken.includes('...')) currentDb.telegramSettings.botToken = botToken;
-    if (chatId !== undefined) currentDb.telegramSettings.chatId = chatId;
+    if (botToken !== undefined && botToken.trim() !== '') currentDb.telegramSettings.botToken = botToken.trim();
+    if (chatId !== undefined && chatId.trim() !== '') currentDb.telegramSettings.chatId = chatId.trim();
     if (enabled !== undefined) currentDb.telegramSettings.enabled = Boolean(enabled);
     if (autoSchedule !== undefined) currentDb.telegramSettings.autoSchedule = autoSchedule;
 
     saveDb(currentDb);
-    res.json({ success: true, message: 'Configurações salvas com sucesso!' });
+    pushCloudDataServer(currentDb.matches, currentDb.telegramSettings);
+    res.json({ success: true, message: 'Configurações salvas e sincronizadas na nuvem!' });
   });
 
   app.post('/api/telegram/test', async (req, res) => {
@@ -733,25 +738,17 @@ async function startServer() {
     const dbMap = new Map<string, Match>();
     (currentDb.matches || []).forEach(m => { if (m && m.id) dbMap.set(m.id, m); });
 
-    // Merge incoming tasks into db matches
+    // Update tasks and notes for provided client matches
     clientMatches.forEach((cm: Match) => {
       if (!cm || !cm.id) return;
       const dbMatch = dbMap.get(cm.id);
       if (dbMatch) {
-        const taskMap = new Map<string, any>();
-        (dbMatch.tasks || []).forEach(t => { if (t && t.id) taskMap.set(t.id, t); });
-        (cm.tasks || []).forEach(t => {
-          if (t && t.id) {
-            if (taskMap.has(t.id)) {
-              const prev = taskMap.get(t.id);
-              taskMap.set(t.id, { ...prev, ...t, completed: Boolean(prev.completed || t.completed) });
-            } else {
-              taskMap.set(t.id, t);
-            }
-          }
-        });
-        dbMatch.tasks = Array.from(taskMap.values());
-        if (cm.notes) dbMatch.notes = cm.notes;
+        if (Array.isArray(cm.tasks)) {
+          dbMatch.tasks = cm.tasks;
+        }
+        if (cm.notes !== undefined) {
+          dbMatch.notes = cm.notes;
+        }
       }
     });
 

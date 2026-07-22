@@ -134,7 +134,7 @@ export default function App() {
 
     setMatches(updated);
     saveLocalMatches(updated);
-    pushCloudData(updated);
+    pushCloudData(updated, telegramSettings);
 
     if (activeTaskMatch && activeTaskMatch.id === matchId) {
       setActiveTaskMatch({
@@ -147,6 +147,12 @@ export default function App() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ completed })
+    });
+
+    await safeFetchJson('/api/matches/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matches: updated })
     });
   };
 
@@ -167,7 +173,7 @@ export default function App() {
 
     setMatches(updated);
     saveLocalMatches(updated);
-    pushCloudData(updated);
+    pushCloudData(updated, telegramSettings);
 
     if (activeTaskMatch && activeTaskMatch.id === matchId) {
       setActiveTaskMatch({
@@ -183,6 +189,12 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: taskId, text, completed: false })
     });
+
+    await safeFetchJson('/api/matches/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matches: updated })
+    });
   };
 
   const handleDeleteTask = async (matchId: string, taskId: string) => {
@@ -195,7 +207,7 @@ export default function App() {
 
     setMatches(updated);
     saveLocalMatches(updated);
-    pushCloudData(updated);
+    pushCloudData(updated, telegramSettings);
 
     if (activeTaskMatch && activeTaskMatch.id === matchId) {
       setActiveTaskMatch({
@@ -206,6 +218,12 @@ export default function App() {
 
     await safeFetchJson(`/api/matches/${matchId}/tasks/${taskId}`, {
       method: 'DELETE'
+    });
+
+    await safeFetchJson('/api/matches/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matches: updated })
     });
   };
 
@@ -220,6 +238,8 @@ export default function App() {
     saveLocalTelegramSettings(newSettings);
     setTelegramSettings(newSettings);
 
+    await pushCloudData(matches, newSettings);
+
     const res = await safeFetchJson('/api/telegram/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -227,7 +247,7 @@ export default function App() {
     });
 
     if (res.ok) {
-      showToast('Configurações salvas no servidor com sucesso!');
+      showToast('Configurações e horários salvos e sincronizados com sucesso!');
     } else {
       showToast('Configurações salvas localmente!');
     }

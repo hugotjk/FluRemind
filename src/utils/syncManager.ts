@@ -310,45 +310,43 @@ export function mergeMatchesWithTasks(...matchLists: Match[][]): Match[] {
   if (validLists.length === 0) return [];
 
   const base = validLists[0];
-  const tasksMap = new Map<string, Map<string, any>>();
-  const notesMap = new Map<string, string>();
-
-  validLists.forEach(list => {
-    list.forEach(m => {
-      if (!m || !m.id) return;
-      if (!tasksMap.has(m.id)) {
-        tasksMap.set(m.id, new Map());
-      }
-      const mTasks = tasksMap.get(m.id)!;
-
-      (m.tasks || []).forEach(t => {
-        if (t && t.id) {
-          if (mTasks.has(t.id)) {
-            const prev = mTasks.get(t.id);
-            mTasks.set(t.id, {
-              ...prev,
-              ...t,
-              completed: Boolean(prev.completed || t.completed)
-            });
-          } else {
-            mTasks.set(t.id, t);
-          }
-        }
-      });
-
-      if (m.notes && !notesMap.has(m.id)) {
-        notesMap.set(m.id, m.notes);
-      }
-    });
-  });
 
   return base.map(m => {
-    const mTasksMap = tasksMap.get(m.id);
-    const tasks = mTasksMap ? Array.from(mTasksMap.values()) : (m.tasks || []);
+    if (!m || !m.id) return m;
+
+    const versions = validLists.map(l => l.find(item => item && item.id === m.id)).filter(Boolean) as Match[];
+    const primaryVersion = versions[0];
+    let tasks = primaryVersion.tasks || [];
+
+    // Merge completed status if checked off on any device
+    const taskStatusMap = new Map<string, boolean>();
+    versions.forEach(v => {
+      (v.tasks || []).forEach(t => {
+        if (t && t.id && t.completed) {
+          taskStatusMap.set(t.id, true);
+        }
+      });
+    });
+
+    tasks = tasks.map(t => {
+      if (t && t.id && taskStatusMap.has(t.id)) {
+        return { ...t, completed: true };
+      }
+      return t;
+    });
+
+    let notes = m.notes || '';
+    for (const v of versions) {
+      if (v.notes) {
+        notes = v.notes;
+        break;
+      }
+    }
+
     return {
       ...m,
       tasks,
-      notes: notesMap.get(m.id) || m.notes || ''
+      notes
     };
   });
 }
@@ -360,8 +358,34 @@ export async function syncFixturesAndSheet(): Promise<Match[]> {
   let cloudMatches: Match[] = [];
   try {
     const cloud = await syncCloudData();
-    if (cloud.success && Array.isArray(cloud.remoteMatches) && cloud.remoteMatches.length > 0) {
-      cloudMatches = cloud.remoteMatches;
+    if (cloud.success) {
+      if (Array.isArray(cloud.remoteMatches) && cloud.remoteMatches.length > 0) {
+        cloudMatches = cloud.remoteMatches;
+      }
+      if (cloud.remoteTelegram) {
+        const localTg = getLocalTelegramSettings();
+        if (localTg) {
+          // Merge times array so no scheduled times get lost
+          const mergedTimes = Array.from(new Set([
+            ...(localTg.autoSchedule?.notificationTimes || []),
+            ...(cloud.remoteTelegram.autoSchedule?.notificationTimes || [])
+          ])).sort();
+
+          const mergedTg: TelegramSettings = {
+            ...cloud.remoteTelegram,
+            ...localTg,
+            autoSchedule: {
+              enabled: localTg.autoSchedule?.enabled ?? cloud.remoteTelegram.autoSchedule?.enabled ?? true,
+              daysOfWeek: localTg.autoSchedule?.daysOfWeek || cloud.remoteTelegram.autoSchedule?.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
+              notificationTimes: mergedTimes.length > 0 ? mergedTimes : (localTg.autoSchedule?.notificationTimes || ['08:00', '12:00', '18:00']),
+              onlyOnMatchDays: localTg.autoSchedule?.onlyOnMatchDays ?? cloud.remoteTelegram.autoSchedule?.onlyOnMatchDays ?? false
+            }
+          };
+          saveLocalTelegramSettings(mergedTg);
+        } else {
+          saveLocalTelegramSettings(cloud.remoteTelegram);
+        }
+      }
     }
   } catch (e) {}
 

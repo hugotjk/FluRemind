@@ -186,14 +186,13 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
               <div>
                 <label className="block text-xs font-bold text-stone-700 uppercase mb-1 flex items-center justify-between">
                   <span>Bot Token</span>
-                  <a
-                    href="https://t.me/BotFather"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sky-600 hover:underline flex items-center gap-0.5 text-[11px] lowercase font-normal"
+                  <button
+                    type="button"
+                    onClick={() => window.open('https://t.me/BotFather', '_blank', 'noopener,noreferrer')}
+                    className="text-sky-600 hover:underline flex items-center gap-0.5 text-[11px] lowercase font-normal cursor-pointer"
                   >
                     criar no @BotFather <ExternalLink className="w-2.5 h-2.5" />
-                  </a>
+                  </button>
                 </label>
                 <input
                   type="text"
@@ -208,14 +207,13 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
               <div>
                 <label className="block text-xs font-bold text-stone-700 uppercase mb-1 flex items-center justify-between">
                   <span>Chat ID</span>
-                  <a
-                    href="https://t.me/userinfobot"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sky-600 hover:underline flex items-center gap-0.5 text-[11px] lowercase font-normal"
+                  <button
+                    type="button"
+                    onClick={() => window.open('https://t.me/userinfobot', '_blank', 'noopener,noreferrer')}
+                    className="text-sky-600 hover:underline flex items-center gap-0.5 text-[11px] lowercase font-normal cursor-pointer"
                   >
                     descobrir no @userinfobot <ExternalLink className="w-2.5 h-2.5" />
-                  </a>
+                  </button>
                 </label>
                 <input
                   type="text"
