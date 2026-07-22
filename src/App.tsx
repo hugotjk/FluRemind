@@ -15,7 +15,8 @@ import {
   saveLocalTelegramSettings,
   getLocalLogs,
   saveLocalLogs,
-  syncFixturesAndSheet
+  syncFixturesAndSheet,
+  pushCloudData
 } from './utils/syncManager';
 
 export default function App() {
@@ -51,12 +52,18 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Sync with Google Sheet
+  // Sync with Google Sheet & Cloud
   const handleSyncSheet = async () => {
     try {
       const syncedMatches = await syncFixturesAndSheet();
       if (syncedMatches && Array.isArray(syncedMatches) && syncedMatches.length > 0) {
         setMatches(syncedMatches);
+        // Keep active task modal in sync if currently open
+        setActiveTaskMatch(prev => {
+          if (!prev) return null;
+          const updated = syncedMatches.find(m => m.id === prev.id);
+          return updated || prev;
+        });
         return syncedMatches;
       }
     } catch (err) {
@@ -105,10 +112,10 @@ export default function App() {
   useEffect(() => {
     fetchData();
 
-    // Auto-sync with Google Sheet every 30 seconds
+    // Auto-sync with Server & Cloud every 10 seconds for multi-device real-time sync
     const interval = setInterval(() => {
       handleSyncSheet();
-    }, 30000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, []);
@@ -127,6 +134,7 @@ export default function App() {
 
     setMatches(updated);
     saveLocalMatches(updated);
+    pushCloudData(updated);
 
     if (activeTaskMatch && activeTaskMatch.id === matchId) {
       setActiveTaskMatch({
@@ -143,8 +151,9 @@ export default function App() {
   };
 
   const handleAddTask = async (matchId: string, text: string) => {
+    const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const newTask = {
-      id: `task-${Date.now()}`,
+      id: taskId,
       text,
       completed: false
     };
@@ -158,6 +167,7 @@ export default function App() {
 
     setMatches(updated);
     saveLocalMatches(updated);
+    pushCloudData(updated);
 
     if (activeTaskMatch && activeTaskMatch.id === matchId) {
       setActiveTaskMatch({
@@ -171,7 +181,7 @@ export default function App() {
     await safeFetchJson(`/api/matches/${matchId}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ id: taskId, text, completed: false })
     });
   };
 
@@ -185,6 +195,7 @@ export default function App() {
 
     setMatches(updated);
     saveLocalMatches(updated);
+    pushCloudData(updated);
 
     if (activeTaskMatch && activeTaskMatch.id === matchId) {
       setActiveTaskMatch({

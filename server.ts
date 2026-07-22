@@ -23,6 +23,24 @@ interface DbSchema {
 const DEFAULT_BOT_TOKEN = '8951861356:AAHo0fczfX2TORYkuNQT8VMcN5aRdSuhLsc';
 const DEFAULT_CHAT_ID = '640896648';
 const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1BgoimzpqdL5UXpCw12vz4BiSuRYxIlGr/export?format=csv';
+const GLOBAL_CLOUD_BLOB_ID = '019f865f-95dd-7d09-95ac-045376f38d45';
+
+async function pushCloudDataServer(matchesData: Match[], telegramData?: TelegramSettings) {
+  try {
+    const payload = {
+      matches: matchesData,
+      telegramSettings: telegramData,
+      updatedAt: new Date().toISOString()
+    };
+    await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_BLOB_ID}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    console.warn('Server Cloud Blob push notice:', e);
+  }
+}
 
 function ensureDb(): DbSchema {
   if (!fs.existsSync(DATA_DIR)) {
@@ -335,6 +353,29 @@ async function syncGoogleSheetData(db: DbSchema): Promise<Match[]> {
       return db.matches;
     }
 
+    // Try fetching existing tasks from Cloud Blob as well to ensure cross-device consistency
+    const cloudTasksMap = new Map<string, any[]>();
+    const cloudNotesMap = new Map<string, string>();
+    try {
+      const cloudRes = await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_BLOB_ID}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (cloudRes.ok) {
+        const cloudData = await cloudRes.json();
+        const cloudMatches = Array.isArray(cloudData) ? cloudData : (cloudData?.matches || []);
+        cloudMatches.forEach((m: any) => {
+          if (m && m.id) {
+            if (Array.isArray(m.tasks) && m.tasks.length > 0) {
+              cloudTasksMap.set(m.id, m.tasks);
+            }
+            if (m.notes) {
+              cloudNotesMap.set(m.id, m.notes);
+            }
+          }
+        });
+      }
+    } catch (e) {}
+
     const existingMap = new Map<string, Match>();
     (db.matches || []).forEach(m => {
       if (m && m.id) existingMap.set(m.id, m);
@@ -342,17 +383,34 @@ async function syncGoogleSheetData(db: DbSchema): Promise<Match[]> {
 
     const updatedMatches: Match[] = parsedMatches.map(inc => {
       const existing = existingMap.get(inc.id);
+      const existingTasks = existing ? existing.tasks || [] : [];
+      const cloudTasks = cloudTasksMap.get(inc.id) || [];
+
+      // Merge tasks uniquely by task id
+      const taskMap = new Map<string, any>();
+      existingTasks.forEach(t => { if (t && t.id) taskMap.set(t.id, t); });
+      cloudTasks.forEach(t => {
+        if (t && t.id) {
+          if (taskMap.has(t.id)) {
+            const prev = taskMap.get(t.id);
+            taskMap.set(t.id, { ...prev, ...t, completed: Boolean(prev.completed || t.completed) });
+          } else {
+            taskMap.set(t.id, t);
+          }
+        }
+      });
+
       return {
         ...inc,
-        // Preserve user created tasks for this specific Ord number
-        tasks: existing ? existing.tasks || [] : [],
-        notes: existing ? existing.notes || '' : ''
+        tasks: Array.from(taskMap.values()),
+        notes: existing?.notes || cloudNotesMap.get(inc.id) || ''
       };
     });
 
     db.matches = updatedMatches;
     db.lastSyncedAt = new Date().toISOString();
     saveDb(db);
+    pushCloudDataServer(db.matches, db.telegramSettings);
     return updatedMatches;
 
   } catch (err: any) {
@@ -621,15 +679,19 @@ async function startServer() {
     if (!match) return res.status(404).json({ error: 'Jogo não encontrado' });
 
     const newTask = {
-      id: `task-${Date.now()}`,
+      id: req.body.id || `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       text: req.body.text || 'Nova tarefa',
-      completed: false,
+      completed: Boolean(req.body.completed),
       priority: req.body.priority || 'normal'
     };
 
     if (!match.tasks) match.tasks = [];
-    match.tasks.push(newTask);
+    // Avoid duplicate tasks if id supplied
+    if (!match.tasks.some(t => t.id === newTask.id)) {
+      match.tasks.push(newTask);
+    }
     saveDb(currentDb);
+    pushCloudDataServer(currentDb.matches, currentDb.telegramSettings);
     res.status(201).json(newTask);
   });
 
@@ -645,6 +707,7 @@ async function startServer() {
     if (req.body.text !== undefined) task.text = req.body.text;
 
     saveDb(currentDb);
+    pushCloudDataServer(currentDb.matches, currentDb.telegramSettings);
     res.json(task);
   });
 
@@ -655,7 +718,46 @@ async function startServer() {
 
     match.tasks = (match.tasks || []).filter(t => t.id !== req.params.taskId);
     saveDb(currentDb);
+    pushCloudDataServer(currentDb.matches, currentDb.telegramSettings);
     res.json({ success: true, taskId: req.params.taskId });
+  });
+
+  // Direct sync of all matches & tasks from any client device
+  app.post('/api/matches/sync', (req, res) => {
+    const clientMatches = req.body.matches;
+    if (!Array.isArray(clientMatches)) {
+      return res.status(400).json({ error: 'Invalid payload, expected matches array' });
+    }
+
+    const currentDb = ensureDb();
+    const dbMap = new Map<string, Match>();
+    (currentDb.matches || []).forEach(m => { if (m && m.id) dbMap.set(m.id, m); });
+
+    // Merge incoming tasks into db matches
+    clientMatches.forEach((cm: Match) => {
+      if (!cm || !cm.id) return;
+      const dbMatch = dbMap.get(cm.id);
+      if (dbMatch) {
+        const taskMap = new Map<string, any>();
+        (dbMatch.tasks || []).forEach(t => { if (t && t.id) taskMap.set(t.id, t); });
+        (cm.tasks || []).forEach(t => {
+          if (t && t.id) {
+            if (taskMap.has(t.id)) {
+              const prev = taskMap.get(t.id);
+              taskMap.set(t.id, { ...prev, ...t, completed: Boolean(prev.completed || t.completed) });
+            } else {
+              taskMap.set(t.id, t);
+            }
+          }
+        });
+        dbMatch.tasks = Array.from(taskMap.values());
+        if (cm.notes) dbMatch.notes = cm.notes;
+      }
+    });
+
+    saveDb(currentDb);
+    pushCloudDataServer(currentDb.matches, currentDb.telegramSettings);
+    res.json({ success: true, matches: currentDb.matches });
   });
 
   // Logs

@@ -305,42 +305,92 @@ export async function pushCloudData(matchesData: Match[], telegramData?: Telegra
   }
 }
 
-// Master multi-tier synchronization function (Server -> Google Sheet Direct -> Cloud Blob -> LocalStorage)
+export function mergeMatchesWithTasks(...matchLists: Match[][]): Match[] {
+  const validLists = matchLists.filter(l => Array.isArray(l) && l.length > 0);
+  if (validLists.length === 0) return [];
+
+  const base = validLists[0];
+  const tasksMap = new Map<string, Map<string, any>>();
+  const notesMap = new Map<string, string>();
+
+  validLists.forEach(list => {
+    list.forEach(m => {
+      if (!m || !m.id) return;
+      if (!tasksMap.has(m.id)) {
+        tasksMap.set(m.id, new Map());
+      }
+      const mTasks = tasksMap.get(m.id)!;
+
+      (m.tasks || []).forEach(t => {
+        if (t && t.id) {
+          if (mTasks.has(t.id)) {
+            const prev = mTasks.get(t.id);
+            mTasks.set(t.id, {
+              ...prev,
+              ...t,
+              completed: Boolean(prev.completed || t.completed)
+            });
+          } else {
+            mTasks.set(t.id, t);
+          }
+        }
+      });
+
+      if (m.notes && !notesMap.has(m.id)) {
+        notesMap.set(m.id, m.notes);
+      }
+    });
+  });
+
+  return base.map(m => {
+    const mTasksMap = tasksMap.get(m.id);
+    const tasks = mTasksMap ? Array.from(mTasksMap.values()) : (m.tasks || []);
+    return {
+      ...m,
+      tasks,
+      notes: notesMap.get(m.id) || m.notes || ''
+    };
+  });
+}
+
+// Master multi-tier synchronization function (Server -> Cloud Blob -> Google Sheet Direct -> LocalStorage)
 export async function syncFixturesAndSheet(): Promise<Match[]> {
+  const localMatches = getLocalMatches();
+
+  let cloudMatches: Match[] = [];
+  try {
+    const cloud = await syncCloudData();
+    if (cloud.success && Array.isArray(cloud.remoteMatches) && cloud.remoteMatches.length > 0) {
+      cloudMatches = cloud.remoteMatches;
+    }
+  } catch (e) {}
+
   // 1. Try server API endpoint
   try {
     const res = await safeFetchJson<{ success?: boolean; matches?: Match[] }>('/api/sync/sheet');
     if (res.ok && res.data && Array.isArray(res.data.matches) && res.data.matches.length > 0) {
-      saveLocalMatches(res.data.matches);
-      return res.data.matches;
+      const merged = mergeMatchesWithTasks(res.data.matches, cloudMatches, localMatches);
+      saveLocalMatches(merged);
+      return merged;
     }
   } catch (e) {}
 
   // 2. Direct client-side fetch from Google Sheets CSV
   const directMatches = await fetchDirectGoogleSheetCSV();
   if (directMatches.length > 0) {
-    const local = getLocalMatches();
-    const localMap = new Map((local || []).map(m => [m.id, m]));
-    const merged = directMatches.map(m => {
-      const existing = localMap.get(m.id);
-      return {
-        ...m,
-        tasks: existing ? existing.tasks || [] : [],
-        notes: existing ? existing.notes || '' : ''
-      };
-    });
+    const merged = mergeMatchesWithTasks(directMatches, cloudMatches, localMatches);
     saveLocalMatches(merged);
     return merged;
   }
 
   // 3. Multi-Device cloud fallback
-  const cloud = await syncCloudData();
-  if (cloud.success && cloud.remoteMatches && cloud.remoteMatches.length > 0) {
-    saveLocalMatches(cloud.remoteMatches);
-    return cloud.remoteMatches;
+  if (cloudMatches.length > 0) {
+    const merged = mergeMatchesWithTasks(cloudMatches, localMatches);
+    saveLocalMatches(merged);
+    return merged;
   }
 
   // 4. Fallback to localStorage
-  return getLocalMatches();
+  return localMatches;
 }
 
