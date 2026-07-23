@@ -1,401 +1,349 @@
 {
   "matches": [
     {
-      "id": "espn-401840813",
-      "opponent": "Grêmio",
-      "date": "2026-01-28",
-      "time": "19:30",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Grêmio at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "match-1784661837313",
-      "opponent": "Bahia",
-      "date": "2026-02-05",
-      "time": "19:00",
-      "competition": "Brasileirão",
-      "location": "Arena Fonte Nova",
-      "isHome": false,
-      "notes": "Fluminense at Bahia",
-      "tasks": [
-        {
-          "id": "task-1784662032199",
-          "text": "Levar meias Rikam",
-          "completed": false,
-          "priority": "normal"
-        },
-        {
-          "id": "task-1784662039547",
-          "text": "Levar bones Flexcap",
-          "completed": false,
-          "priority": "normal"
-        },
-        {
-          "id": "task-1784662044161",
-          "text": "Levar bandeiras BC Sartori",
-          "completed": false,
-          "priority": "normal"
-        }
-      ]
-    },
-    {
-      "id": "flu-bota-brasileirao",
-      "opponent": "Botafogo",
-      "date": "2026-02-12",
-      "time": "19:30",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Botafogo at Fluminense",
-      "tasks": [
-        {
-          "id": "t15",
-          "text": "Comprar ingresso setor visitante",
-          "completed": false,
-          "priority": "high"
-        },
-        {
-          "id": "t16",
-          "text": "Separar manto tricolor",
-          "completed": false,
-          "priority": "normal"
-        }
-      ]
-    },
-    {
-      "id": "espn-401841004",
-      "opponent": "Palmeiras",
-      "date": "2026-02-26",
-      "time": "21:30",
-      "competition": "Brasileirão",
-      "location": "Arena Barueri",
-      "isHome": false,
-      "notes": "Fluminense at Palmeiras",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841009",
-      "opponent": "Remo",
-      "date": "2026-03-12",
-      "time": "19:00",
-      "competition": "Brasileirão",
-      "location": "Mangueirão",
-      "isHome": false,
-      "notes": "Fluminense at Remo",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841022",
-      "opponent": "Athletico Paranaense",
-      "date": "2026-03-15",
-      "time": "16:00",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Athletico Paranaense at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841030",
-      "opponent": "Vasco da Gama",
-      "date": "2026-03-19",
-      "time": "21:30",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": false,
-      "notes": "Fluminense at Vasco da Gama",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841044",
-      "opponent": "Atlético-mg",
-      "date": "2026-03-21",
-      "time": "18:30",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Atlético-MG at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841054",
-      "opponent": "Corinthians",
-      "date": "2026-04-02",
-      "time": "21:30",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Corinthians at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841063",
-      "opponent": "Coritiba",
-      "date": "2026-04-04",
-      "time": "20:30",
-      "competition": "Brasileirão",
-      "location": "Couto Pereira",
-      "isHome": false,
-      "notes": "Fluminense at Coritiba",
-      "tasks": []
-    },
-    {
-      "id": "flu-fla-today",
-      "opponent": "Flamengo",
-      "date": "2026-04-12",
-      "time": "18:00",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Flamengo at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841082",
-      "opponent": "Santos",
-      "date": "2026-04-19",
-      "time": "16:00",
-      "competition": "Brasileirão",
-      "location": "Estádio Vila Belmiro (Urbano Caldeira)",
-      "isHome": false,
-      "notes": "Fluminense at Santos",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841090",
-      "opponent": "Chapecoense",
-      "date": "2026-04-26",
-      "time": "20:30",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Chapecoense at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841104",
-      "opponent": "Internacional",
-      "date": "2026-05-03",
-      "time": "18:30",
-      "competition": "Brasileirão",
-      "location": "Estadio Beira-Rio",
-      "isHome": false,
-      "notes": "Fluminense at Internacional",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841113",
-      "opponent": "Vitória",
-      "date": "2026-05-09",
-      "time": "18:00",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Vitória at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841127",
-      "opponent": "São Paulo",
-      "date": "2026-05-16",
-      "time": "19:00",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "São Paulo at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841134",
-      "opponent": "Mirassol",
-      "date": "2026-05-23",
-      "time": "19:00",
-      "competition": "Brasileirão",
-      "location": "Estadio Municipal José Maria de Campos Maia",
-      "isHome": false,
-      "notes": "Fluminense at Mirassol",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841145",
-      "opponent": "Cruzeiro",
-      "date": "2026-05-31",
-      "time": "20:30",
-      "competition": "Brasileirão",
-      "location": "Estadio Mineirão",
-      "isHome": false,
-      "notes": "Fluminense at Cruzeiro",
-      "tasks": []
-    },
-    {
-      "id": "espn-401841153",
-      "opponent": "Red Bull Bragantino",
-      "date": "2026-07-17",
-      "time": "20:00",
-      "competition": "Brasileirão",
-      "location": "Estadio do Maracana",
-      "isHome": true,
-      "notes": "Red Bull Bragantino at Fluminense",
-      "tasks": []
-    },
-    {
-      "id": "flu-river-libertadores",
-      "opponent": "River Plate",
-      "date": "2026-07-24",
-      "time": "21:30",
-      "competition": "Copa Libertadores",
-      "location": "Maracanã, Rio de Janeiro",
-      "isHome": true,
-      "notes": "Rodada crucial da Fase de Grupos da Libertadores! Maraca tricolor lotado.",
-      "tasks": [
-        {
-          "id": "t6",
-          "text": "Garantir ingresso no setor Sul",
-          "completed": true,
-          "priority": "high"
-        },
-        {
-          "id": "t7",
-          "text": "Vestir a armadura tricolor oficial",
-          "completed": false,
-          "priority": "normal"
-        },
-        {
-          "id": "t8",
-          "text": "Organizar pó de arroz para a recepção do ônibus do Flu",
-          "completed": false,
-          "priority": "high"
-        },
-        {
-          "id": "t9",
-          "text": "Conferir transmissão na TV / Paramount+",
-          "completed": false,
-          "priority": "normal"
-        }
-      ]
-    },
-    {
-      "id": "sofa-gremio",
-      "opponent": "Grêmio",
+      "id": "ord-1",
+      "opponent": "Gremio",
       "date": "2026-07-26",
-      "time": "18:30",
+      "time": "16:30",
       "competition": "Brasileirão",
-      "location": "Arena do Grêmio, Porto Alegre",
+      "location": "Maracanã",
       "isHome": false,
-      "notes": "Rodada 17",
-      "tasks": []
+      "homeTeam": "Gremio",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/gremio.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
     },
     {
-      "id": "match-1784661837313",
+      "id": "ord-2",
       "opponent": "Bahia",
       "date": "2026-07-29",
       "time": "21:30",
       "competition": "Brasileirão",
-      "location": "Maracanã, Rio de Janeiro",
+      "location": "Maracanã",
       "isHome": true,
-      "notes": "Rodada 18",
-      "tasks": [
-        {
-          "id": "task-1784662032199",
-          "text": "Levar meias Rikam",
-          "completed": false,
-          "priority": "normal"
-        },
-        {
-          "id": "task-1784662039547",
-          "text": "Levar bones Flexcap",
-          "completed": false,
-          "priority": "normal"
-        },
-        {
-          "id": "task-1784662044161",
-          "text": "Levar bandeiras BC Sartori",
-          "completed": false,
-          "priority": "normal"
-        }
-      ]
+      "homeTeam": "Fluminense",
+      "awayTeam": "Bahia",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/bahia.png",
+      "tasks": [],
+      "notes": ""
     },
     {
-      "id": "sofa-vasco-1",
+      "id": "ord-3",
       "opponent": "Vasco da Gama",
       "date": "2026-08-01",
       "time": "17:30",
       "competition": "Copa do Brasil",
-      "location": "São Januário, Rio de Janeiro",
+      "location": "Maracanã",
       "isHome": false,
-      "notes": "Oitavas - Ida",
-      "tasks": []
+      "homeTeam": "Vasco da Gama",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/vasco.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
     },
     {
-      "id": "sofa-vasco-2",
+      "id": "ord-4",
       "opponent": "Vasco da Gama",
       "date": "2026-08-05",
       "time": "21:30",
       "competition": "Copa do Brasil",
-      "location": "Maracanã, Rio de Janeiro",
+      "location": "Maracanã",
       "isHome": true,
-      "notes": "Oitavas - Volta",
-      "tasks": []
+      "homeTeam": "Fluminense",
+      "awayTeam": "Vasco da Gama",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/vasco.png",
+      "tasks": [],
+      "notes": ""
     },
     {
-      "id": "flu-bota-brasileirao",
+      "id": "ord-5",
       "opponent": "Botafogo",
       "date": "2026-08-08",
       "time": "21:00",
       "competition": "Brasileirão",
-      "location": "Estádio Nilton Santos (Engenhão)",
+      "location": "Maracanã",
       "isHome": false,
-      "notes": "Clássico Vovô",
-      "tasks": [
-        {
-          "id": "t15",
-          "text": "Comprar ingresso setor visitante",
-          "completed": false,
-          "priority": "high"
-        },
-        {
-          "id": "t16",
-          "text": "Separar manto tricolor",
-          "completed": false,
-          "priority": "normal"
-        }
-      ]
+      "homeTeam": "Botafogo",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/botafogo.gif",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
     },
     {
-      "id": "sofa-independiente",
-      "opponent": "Independiente Riv.",
+      "id": "ord-6",
+      "opponent": "Independiente Rivadavia - ARG",
       "date": "2026-08-11",
       "time": "19:00",
       "competition": "Copa Libertadores",
-      "location": "Maracanã, Rio de Janeiro",
+      "location": "Maracanã",
       "isHome": true,
-      "notes": "Libertadores",
-      "tasks": []
+      "homeTeam": "Fluminense",
+      "awayTeam": "Independiente Rivadavia - ARG",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/indepe_rivadavia.png",
+      "tasks": [],
+      "notes": ""
     },
     {
-      "id": "flu-fla-today",
-      "opponent": "Flamengo",
+      "id": "ord-7",
+      "opponent": "Palmeiras",
       "date": "2026-08-16",
+      "time": "16:30",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": true,
+      "homeTeam": "Fluminense",
+      "awayTeam": "Palmeiras",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/palmeiras.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-8",
+      "opponent": "Independiente Rivadavia - ARG",
+      "date": "2026-08-18",
+      "time": "19:00",
+      "competition": "Copa Libertadores",
+      "location": "Maracanã",
+      "isHome": false,
+      "homeTeam": "Independiente Rivadavia - ARG",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/indepe_rivadavia.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-9",
+      "opponent": "Remo",
+      "date": "2026-08-22",
       "time": "16:00",
       "competition": "Brasileirão",
-      "location": "Maracanã, Rio de Janeiro",
+      "location": "Maracanã",
       "isHome": true,
-      "notes": "Fla-Flu",
-      "tasks": []
+      "homeTeam": "Fluminense",
+      "awayTeam": "Remo",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/remo.png",
+      "tasks": [],
+      "notes": ""
     },
     {
-      "id": "sofa-ldu",
-      "opponent": "LDU Quito",
-      "date": "2026-08-20",
-      "time": "21:30",
-      "competition": "Copa Libertadores",
-      "location": "Estadio Rodrigo Paz Delgado",
+      "id": "ord-10",
+      "opponent": "Athletico Paranaense",
+      "date": "2026-08-30",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
       "isHome": false,
-      "notes": "Libertadores",
-      "tasks": []
+      "homeTeam": "Athletico Paranaense",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/atlpr.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-11",
+      "opponent": "Vasco da Gama",
+      "date": "2026-09-06",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": true,
+      "homeTeam": "Fluminense",
+      "awayTeam": "Vasco da Gama",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/vasco.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-12",
+      "opponent": "Atletico Mineiro",
+      "date": "2026-09-13",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": false,
+      "homeTeam": "Atletico Mineiro",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/atletico.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-13",
+      "opponent": "Corinthians",
+      "date": "2026-09-20",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": false,
+      "homeTeam": "Corinthians",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/corinthians.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-14",
+      "opponent": "Corinthians",
+      "date": "2026-10-07",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": true,
+      "homeTeam": "Fluminense",
+      "awayTeam": "Corinthians",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/corinthians.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-15",
+      "opponent": "Flamengo",
+      "date": "2026-10-11",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": false,
+      "homeTeam": "Flamengo",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/fla.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-16",
+      "opponent": "Santos",
+      "date": "2026-10-18",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": true,
+      "homeTeam": "Fluminense",
+      "awayTeam": "Santos",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/santos.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-17",
+      "opponent": "Chapecoense",
+      "date": "2026-10-25",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": false,
+      "homeTeam": "Chapecoense",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/chapeco.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-18",
+      "opponent": "Internacional",
+      "date": "2026-10-28",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": true,
+      "homeTeam": "Fluminense",
+      "awayTeam": "Internacional",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/interrs.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-19",
+      "opponent": "Vitória",
+      "date": "2026-11-04",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": false,
+      "homeTeam": "Vitória",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/vitoria.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-20",
+      "opponent": "São Paulo",
+      "date": "2026-11-18",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": false,
+      "homeTeam": "São Paulo",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/saopaulo.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-21",
+      "opponent": "Mirassol",
+      "date": "2026-11-22",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": true,
+      "homeTeam": "Fluminense",
+      "awayTeam": "Mirassol",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/mirassol.jpg",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-22",
+      "opponent": "Cruzeiro",
+      "date": "2026-11-29",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": true,
+      "homeTeam": "Fluminense",
+      "awayTeam": "Cruzeiro",
+      "homeLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "awayLogo": "https://escudosfc.com.br/images/cruzeiro.png",
+      "tasks": [],
+      "notes": ""
+    },
+    {
+      "id": "ord-23",
+      "opponent": "Red Bull Bragantino",
+      "date": "2026-12-02",
+      "time": "00:00",
+      "competition": "Brasileirão",
+      "location": "Maracanã",
+      "isHome": false,
+      "homeTeam": "Red Bull Bragantino",
+      "awayTeam": "Fluminense",
+      "homeLogo": "https://escudosfc.com.br/images/bragantino.png",
+      "awayLogo": "https://escudosfc.com.br/images/fluminense.png",
+      "tasks": [],
+      "notes": ""
     }
   ],
   "telegramSettings": {
@@ -428,5 +376,6 @@
       "matchId": "flu-fla-today",
       "opponent": "Flamengo"
     }
-  ]
+  ],
+  "lastSyncedAt": "2026-07-23T14:10:26.395Z"
 }

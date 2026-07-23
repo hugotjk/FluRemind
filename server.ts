@@ -704,19 +704,62 @@ async function startServer() {
   const handleCronReminders = async (req: express.Request, res: express.Response) => {
     try {
       const currentDb = ensureDb();
+
+      // Pull latest cloud data so changes saved from web client are active
+      try {
+        const cloudRes = await fetch(`https://jsonblob.com/api/jsonBlob/${GLOBAL_CLOUD_BLOB_ID}`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (cloudRes.ok) {
+          const cloudData: any = await cloudRes.json();
+          if (cloudData) {
+            if (cloudData.telegramSettings) {
+              currentDb.telegramSettings = {
+                ...currentDb.telegramSettings,
+                ...cloudData.telegramSettings
+              };
+            }
+            if (Array.isArray(cloudData.matches) && cloudData.matches.length > 0) {
+              currentDb.matches = cloudData.matches;
+            }
+            saveDb(currentDb);
+          }
+        }
+      } catch (e) {}
+
       const nowBR = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
       const hour = nowBR.getHours();
+      const dayOfWeek = nowBR.getDay();
+      const dateStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth() + 1).padStart(2, '0')}-${String(nowBR.getDate()).padStart(2, '0')}`;
       const isManual = req.query.manual === 'true' || req.body?.manual === true;
 
-      if (!isManual && hour === 12) {
-        const dateStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth() + 1).padStart(2, '0')}-${String(nowBR.getDate()).padStart(2, '0')}`;
-        const tomorrowObj = new Date(nowBR.getTime() + 24 * 60 * 60 * 1000);
-        const tomorrowStr = `${tomorrowObj.getFullYear()}-${String(tomorrowObj.getMonth() + 1).padStart(2, '0')}-${String(tomorrowObj.getDate()).padStart(2, '0')}`;
-        const hasMatchToday = (currentDb.matches || []).some(m => m && m.date === dateStr);
-        const hasMatchTomorrow = (currentDb.matches || []).some(m => m && m.date === tomorrowStr);
+      if (!isManual) {
+        const autoSchedule = currentDb.telegramSettings?.autoSchedule;
+        if (!currentDb.telegramSettings?.enabled || !autoSchedule?.enabled) {
+          return res.json({ success: false, message: 'Notificações automáticas estão desativadas nas configurações.' });
+        }
 
-        if (!hasMatchToday && !hasMatchTomorrow) {
-          return res.json({ success: true, message: 'Disparo das 12:00 ignorado pois hoje não é véspera nem dia de jogo.' });
+        const days = autoSchedule.daysOfWeek || [0, 1, 2, 3, 4, 5, 6];
+        if (!days.includes(dayOfWeek)) {
+          return res.json({ success: false, message: `Disparo ignorado pois o dia da semana (${dayOfWeek}) não está ativado.` });
+        }
+
+        if (autoSchedule.onlyOnMatchDays) {
+          const hasMatchToday = (currentDb.matches || []).some(m => m && m.date === dateStr);
+          if (!hasMatchToday) {
+            return res.json({ success: false, message: 'Disparo ignorado pois hoje não é dia de jogo e a opção "Apenas em dias de jogos" está ativa.' });
+          }
+        }
+
+        if (hour === 12) {
+          const tomorrowObj = new Date(nowBR.getTime() + 24 * 60 * 60 * 1000);
+          const tomorrowStr = `${tomorrowObj.getFullYear()}-${String(tomorrowObj.getMonth() + 1).padStart(2, '0')}-${String(tomorrowObj.getDate()).padStart(2, '0')}`;
+          const hasMatchToday = (currentDb.matches || []).some(m => m && m.date === dateStr);
+          const hasMatchTomorrow = (currentDb.matches || []).some(m => m && m.date === tomorrowStr);
+
+          if (!hasMatchToday && !hasMatchTomorrow) {
+            return res.json({ success: true, message: 'Disparo das 12:00 ignorado pois hoje não é véspera nem dia de jogo.' });
+          }
         }
       }
 
