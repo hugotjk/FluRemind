@@ -443,7 +443,10 @@ async function triggerNextMatchReminder(db: DbSchema): Promise<{ success: boolea
 
   // Prioritize upcoming matches that have tasks registered
   const matchWithTasks = upcoming.find(m => Array.isArray(m.tasks) && m.tasks.length > 0);
-  const nextMatch = matchWithTasks || upcoming[0] || db.matches[0];
+  if (!matchWithTasks && upcoming.length > 0) {
+    return { success: true, message: 'Nenhum próximo jogo possui tarefas cadastradas. Disparo de lembrete ignorado.' };
+  }
+  const nextMatch = matchWithTasks || db.matches[0];
   if (!nextMatch) {
     return { success: false, message: 'Nenhum próximo jogo encontrado para enviar notificação.' };
   }

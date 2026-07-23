@@ -353,6 +353,24 @@
   },
   "logs": [
     {
+      "id": "log-1784826816462-ord-1",
+      "timestamp": "2026-07-23T17:13:36.462Z",
+      "message": "🇭🇺 📅 <b>PRÓXIMO JOGO DO FLUMINENSE (em 3 dias - 26/07/2026)</b> ⚽\n\n🛡️ <b>Gremio vs Fluminense</b>\n🏆 <b>Competição:</b> Brasileirão\n⏰ <b>Horário:</b> 16:30 hrs (26/07/2026)\n\n📋 <b>CHECKLIST DE TAREFAS (0/0 concluídas):</b>\n<i>Nenhuma tarefa cadastrada para este jogo.</i>\n\n\n🔥 <b>VAMOS, TRICOLOR! VENCER OU VENCER!</b> 🇭🇺",
+      "type": "cron",
+      "success": true,
+      "matchId": "ord-1",
+      "opponent": "Gremio"
+    },
+    {
+      "id": "log-1784826765104-ord-1",
+      "timestamp": "2026-07-23T17:12:45.104Z",
+      "message": "🇭🇺 📅 <b>PRÓXIMO JOGO DO FLUMINENSE (em 3 dias - 26/07/2026)</b> ⚽\n\n🛡️ <b>Gremio vs Fluminense</b>\n🏆 <b>Competição:</b> Brasileirão\n⏰ <b>Horário:</b> 16:30 hrs (26/07/2026)\n\n📋 <b>CHECKLIST DE TAREFAS (0/0 concluídas):</b>\n<i>Nenhuma tarefa cadastrada para este jogo.</i>\n\n\n🔥 <b>VAMOS, TRICOLOR! VENCER OU VENCER!</b> 🇭🇺",
+      "type": "cron",
+      "success": true,
+      "matchId": "ord-1",
+      "opponent": "Gremio"
+    },
+    {
       "id": "log-1784826307675-ord-1",
       "timestamp": "2026-07-23T17:05:07.675Z",
       "message": "🇭🇺 📅 <b>PRÓXIMO JOGO DO FLUMINENSE (em 3 dias - 26/07/2026)</b> ⚽\n\n🛡️ <b>Gremio vs Fluminense</b>\n🏆 <b>Competição:</b> Brasileirão\n⏰ <b>Horário:</b> 16:30 hrs (26/07/2026)\n\n📋 <b>CHECKLIST DE TAREFAS (0/0 concluídas):</b>\n<i>Nenhuma tarefa cadastrada para este jogo.</i>\n\n\n🔥 <b>VAMOS, TRICOLOR! VENCER OU VENCER!</b> 🇭🇺",
@@ -395,5 +413,5 @@
       "opponent": "Flamengo"
     }
   ],
-  "lastSyncedAt": "2026-07-23T17:05:06.443Z"
+  "lastSyncedAt": "2026-07-23T17:13:26.296Z"
 }

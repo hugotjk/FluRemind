@@ -376,6 +376,15 @@ export default async function handler(req: any, res: any) {
       .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
 
     const matchWithTasks = upcoming.find(m => Array.isArray(m.tasks) && m.tasks.length > 0);
+
+    // If automatic (cron execution) and no upcoming match has tasks, skip sending notification
+    if (!isManual && !matchWithTasks) {
+      return res.status(200).json({
+        success: true,
+        message: 'Nenhum próximo jogo possui tarefas cadastradas. Disparo automático ignorado.'
+      });
+    }
+
     const targetMatch = matchWithTasks || upcoming[0] || matches[0];
     if (!targetMatch) {
       return res.status(200).json({ success: false, message: 'Nenhum próximo jogo encontrado.' });
