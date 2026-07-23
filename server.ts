@@ -893,6 +893,9 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Serve public static directory explicitly
+  app.use(express.static(path.join(process.cwd(), 'public')));
+
   // --- VITE MIDDLEWARE FOR DEVELOPMENT OR STATIC SERVING ---
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
