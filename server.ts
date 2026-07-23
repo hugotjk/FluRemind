@@ -441,7 +441,9 @@ async function triggerNextMatchReminder(db: DbSchema): Promise<{ success: boolea
     .filter(m => m && m.date && m.date >= todayStr)
     .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
 
-  const nextMatch = upcoming[0] || db.matches[0];
+  // Prioritize upcoming matches that have tasks registered
+  const matchWithTasks = upcoming.find(m => Array.isArray(m.tasks) && m.tasks.length > 0);
+  const nextMatch = matchWithTasks || upcoming[0] || db.matches[0];
   if (!nextMatch) {
     return { success: false, message: 'Nenhum próximo jogo encontrado para enviar notificação.' };
   }
@@ -659,7 +661,8 @@ async function startServer() {
           .filter(m => m && m.date && m.date >= todayStr)
           .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
 
-        const targetMatch = upcoming[0] || currentDb.matches[0];
+        const matchWithTasks = upcoming.find(m => Array.isArray(m.tasks) && m.tasks.length > 0);
+        const targetMatch = matchWithTasks || upcoming[0] || currentDb.matches[0];
         if (targetMatch) {
           messageToSend = formatMatchTelegramMessage(targetMatch);
         } else {
@@ -895,6 +898,33 @@ async function startServer() {
 
   // Serve public static directory explicitly
   app.use(express.static(path.join(process.cwd(), 'public')));
+
+  // Explicit handlers for iOS / PWA icons to guarantee PNG content-type
+  const iconFiles = [
+    'apple-touch-icon.png',
+    'apple-touch-icon-precomposed.png',
+    'apple-touch-icon-180x180.png',
+    'apple-touch-icon-180x180-precomposed.png',
+    'favicon.png',
+    'favicon.ico',
+    'icon-192.png',
+    'icon-512.png',
+    'manifest.json'
+  ];
+
+  iconFiles.forEach((file) => {
+    app.get(`/${file}`, (req, res) => {
+      const publicFilePath = path.join(process.cwd(), 'public', file);
+      const distFilePath = path.join(process.cwd(), 'dist', file);
+      if (fs.existsSync(publicFilePath)) {
+        res.sendFile(publicFilePath);
+      } else if (fs.existsSync(distFilePath)) {
+        res.sendFile(distFilePath);
+      } else {
+        res.status(404).end();
+      }
+    });
+  });
 
   // --- VITE MIDDLEWARE FOR DEVELOPMENT OR STATIC SERVING ---
   if (process.env.NODE_ENV !== 'production') {
